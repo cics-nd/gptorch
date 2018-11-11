@@ -68,7 +68,7 @@ class VFE(GPModel):
                 inducing_points = Param(th.Tensor(inducing_points).type(float_type))
         else:
             if num_inducing is None:
-                num_inducing = len(input) // 10
+                num_inducing = np.max([len(input) // 10, 1])
             # randomly select num_inducing points from input
             indices = np.arange(len(input))
             np.random.shuffle(indices)
