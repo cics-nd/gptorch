@@ -17,7 +17,7 @@ from unittest import TestCase
 
 # For computations that are limited by computational precision
 comp_tol = 1.0e-12
-# For comptutaions that are limited by Motne Carlo convergence (sampling tests)
+# For comptutaions that are limited by Monte Carlo convergence (sampling tests)
 # This is always dicey, so the tolerance is pretty relaxed
 mc_tol = 0.2
 

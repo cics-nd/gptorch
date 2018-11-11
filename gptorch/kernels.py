@@ -82,7 +82,7 @@ class White(Static):
         if X2 is None:
             return self.variance.transform().expand(X.size(0)).diag()
         else:
-            return th.zeros(*_k_shape(X, X2), dtype=TensorType)
+            return Variable(th.zeros(*_k_shape(X, X2)).type(TensorType))
 
 
 class Constant(Static):
@@ -187,27 +187,6 @@ class Exp(Stationary):
     """
     def K(self, X, X2=None):
         return self.variance.transform() * th.exp(-self.dist(X, X2))
-
-
-class ExpJitter(Exp):
-    """
-    Exponential kernel with built-in jitter
-    """
-    def __init__(self, input_dim, variance=1.0, length_scales=None,
-                 jitter=1.0e-5, ARD=False):
-        super(ExpJitter, self).__init__(input_dim, variance, length_scales, ARD)
-        self.jitter = Param(TensorType([jitter]), requires_transform=True)
-
-    def K(self, X, X2=None):
-        exp_mat = super(ExpJitter, self).K(X, X2)
-
-        # Add jitter only on K(X) and not K(X, X2):
-        if X2 is None:
-            exp_mat += \
-                (self.variance.transform() * self.jitter.transform()).expand_as(
-                    exp_mat).diag().diag()
-
-        return exp_mat
 
 
 class Matern12(Exp):
