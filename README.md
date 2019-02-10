@@ -5,8 +5,8 @@ Gaussian processes with PyTorch
 
 ### Prerequisites
 
-gptorch uses Python 3.6 and requires PyTorch version 0.3.1.
-We're working on moving to the current stable version of PyTorch (0.4.1).
+gptorch uses Python 3.6 and currently requires PyTorch version 0.3.1.
+We're working on moving to the current stable version of PyTorch.
 
 To install PyTorch for CPU only, use
 
@@ -25,7 +25,7 @@ python setup.py install
 ## Models implemented:
 
 - GP regression
-- Sparse GP regression (variational inducing)
+- Sparse GP regression (variational inducing points)
 
 ## To be implemented:
 
