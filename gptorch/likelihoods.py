@@ -59,9 +59,29 @@ class Gaussian(Likelihood):
         # self.variance = F.softplus(self.variance_param)
 
     def logp(self, F, Y):
-        return densities.gaussian(F, Y, self.variance)
+        """
+        Evaluate the log-density of targets at Y, given a Gaussian density 
+        centered at F.
+
+        :param F: Center of the density
+        :type F: torch.autograd.Variable
+        :param Y: Targets where we want to compute the log-pdf
+        :type Y: torch.autograd.Variable
+        """
+        return densities.gaussian(F, Y, self.variance.transform())
 
     def predict_mean_variance(self, mean_f, var_f):
+        """
+        Integrate the input (a Gaussian with provided mean & variance) over the
+        likelihood density
+
+        :param mean_f: Mean of input Gaussian
+        :type mean_f: torch.autograd.Variable
+        :param var_f: Variance of input Gaussian
+        :type var_f: torch.autograd.Variable
+
+        :return: (torch.autograd.Variable, torch.autograd.Variable) mean & var
+        """
         # TODO: consider mulit-output case
         # stupid syntax - expecting broadcasting in PyTorch
         return mean_f, var_f + self.variance.transform().expand_as(var_f)
