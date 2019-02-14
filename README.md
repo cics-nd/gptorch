@@ -3,6 +3,14 @@ Gaussian processes with PyTorch
 
 ## Installation
 
+The simplest way to get set up is to use the provided `environment.yml`, i.e.,
+
+```
+conda env create -f enviroment.yml
+```
+
+Otherwise, read on...
+
 ### Prerequisites
 
 gptorch uses Python 3.6 and currently requires PyTorch version 0.3.1.
