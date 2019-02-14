@@ -15,12 +15,12 @@ requirements = [
 # PyTorch:
 # conda install pytorch=0.3.1 -c pytorch
 
-setup(name='gptorch',
-    version='0.1.0',
-    description='GPtorch - a Gaussian process toolbox built on PyTorch',
-    author='Yinhao Zhu, Steven Atkinson',
-    author_email='yzhu10@nd.edu, satkinso@nd.edu',
-    url='https://github.com/bmmi/gptorch',
+setup(name="gptorch",
+    version="0.1.0",
+    description="GPtorch - a Gaussian process toolbox built on PyTorch",
+    author="Yinhao Zhu, Steven Atkinson",
+    author_email="yzhu10@nd.edu, satkinso@nd.edu",
+    url="https://github.com/cics-nd/gptorch",
     install_requires=requirements,
     packages=find_packages(),
     )
