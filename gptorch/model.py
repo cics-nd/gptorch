@@ -531,9 +531,11 @@ class GPModel(Model):
         y_pred_mean, y_pred_var = y_pred_mean.data.numpy(), y_pred_var.data.numpy()
 
         if metric == 'SMSE':
-            return np.power(y_pred_mean - y_test, 2).sum() / y_test.shape[0] / y_test.var()
+            return np.power(y_pred_mean - y_test, 2).sum() / y_test.shape[0] / \
+                y_test.var()
         elif metric == 'RMSE':
-            return np.sqrt(np.power(y_pred_mean - y_test, 2).sum() / y_test.shape[0])
+            return np.sqrt(np.power(y_pred_mean - y_test, 2).sum() / \
+                y_test.shape[0])
         elif metric == 'MSLL':
             # single output dimension
             # predictions for each independent output dimension are the same
@@ -541,12 +543,15 @@ class GPModel(Model):
             y_train = self.Y.data.numpy()
             m0 = y_train.mean()
             S0 = y_train.var()
-            msll = 0.5 * np.mean(np.log(2 * np.pi * y_pred_var) + np.power(y_pred_mean - y_test, 2) / y_pred_var) - \
-                   0.5 * np.mean(np.log(2 * np.pi * S0) + np.power(y_test - m0, 2) / S0)
-            # 0.5 * (y_test.shape[0] * np.log(2 * np.pi * S0) + np.sum(np.power(y_test - m0, 2) / S0))
+            msll = 0.5 * np.mean(np.log(2 * np.pi * y_pred_var) + \
+                np.power(y_pred_mean - y_test, 2) / y_pred_var) - \
+                0.5 * np.mean(np.log(2 * np.pi * S0) + \
+                np.power(y_test - m0, 2) / S0)
+            # 0.5 * (y_test.shape[0] * np.log(2 * np.pi * S0) + \
+            # np.sum(np.power(y_test - m0, 2) / S0))
             return msll
         elif metric == 'NLML':
             return self.compute_loss().data.numpy()
         else:
-            raise Exception('No such metric are supported currently, select one of the following:'
-                            'SMSE, RSME, MSLL, NLML.')
+            raise Exception('No such metric are supported currently, ' + 
+                'select one of the following: SMSE, RSME, MSLL, NLML.')
