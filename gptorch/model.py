@@ -12,8 +12,7 @@ from .functions import SoftplusInv
 from .util import TensorType
 
 from torch.autograd import Variable, gradcheck
-from torch.nn import Module, Parameter
-from torch.nn import functional as F
+import torch.nn
 import torch as th
 from scipy.optimize import minimize
 import numpy as np
@@ -41,7 +40,7 @@ def _addindent(s_, numSpaces):
     return s
 
 
-class Model(Module):
+class Model(torch.nn.Module):
     """
     Customized Model class for all GP objects
     """
@@ -194,25 +193,26 @@ class Model(Module):
                          rtol=rtol)
 
 
-class Param(Parameter):
+class Param(torch.nn.Parameter):
     """
-    Customized Parameter class
-    Add constraints (using transform) to parameters.
-    Currently only support positive constraints, e.g. for variance
-
-    prior is an instance of the gptorch.Prior class.
+    Customized Parameter class extending the PyTorch Parameter class.
+    Its main purpose is to include the following additional functionality:
+    1) The .transform() member function, in order to impose constraints on the 
+        parameter.
+    2) the .prior member, for incorporation into joint log-probabilities (e.g. 
+        for training)
     """
     def __new__(cls, data=None, requires_grad=True, requires_transform=False,
                 prior=None):
         if requires_transform:
             data = Param._transform_log(data, forward=False)
-        return super(Parameter, cls).__new__(cls, data,
-                                             requires_grad=requires_grad)
+        return super(Param, cls).__new__(cls, data, 
+            requires_grad=requires_grad)
 
     def __init__(self, data, requires_grad=True, requires_transform=False):
+        super(Param, self).__init__()
         self.requires_transform = requires_transform
         self.prior = None
-        super(Param, self).__init__(data, requires_grad=requires_grad)
 
     def transform(self):
         # Avoid in-place operation for Variable, using clone method  ???
@@ -234,7 +234,7 @@ class Param(Parameter):
     @staticmethod
     def _transform_softplus(x, forward):
         if forward:
-            return F.softplus(x, threshold=35)
+            return torch.nn.functional.softplus(x, threshold=35)
         else:
             return SoftplusInv(x)
 
