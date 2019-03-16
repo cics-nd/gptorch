@@ -2,7 +2,7 @@
 # File Created: Saturday, 9th February 2019 9:09:06 pm
 # Author: Steven Atkinson (steven@atkinson.mn)
 
-name: gptorch-pytorch1
+name: gptorch
 channels:
   - pytorch
 dependencies:
