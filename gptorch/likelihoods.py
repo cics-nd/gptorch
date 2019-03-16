@@ -49,14 +49,11 @@ class Likelihood(Model):
 
 
 class Gaussian(Likelihood):
+    # Possibly replace these with torch.distributions?
     def __init__(self, variance=1.0):
         super(Gaussian, self).__init__()
-        # print('here!')
-        # self.variance_param = Parameter(th.FloatTensor(SoftplusInv(1.)))
         self.variance = Param(th.Tensor([variance]).type(float_type),
                               requires_transform=True)
-        # self.variance = Param(th.FloatTensor([1.]))
-        # self.variance = F.softplus(self.variance_param)
 
     def logp(self, F, Y):
         """

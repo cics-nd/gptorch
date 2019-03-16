@@ -6,16 +6,15 @@ Sparse GP regression, including variational GP and others.
 """
 
 from __future__ import absolute_import
-from gptorch.model import GPModel, Param
-from gptorch.mean_functions import Zero
-from gptorch.likelihoods import Gaussian
-from gptorch.functions import cholesky, trtrs
 
-import torch as th
+import torch
 import numpy as np
 from torch.autograd import Variable
 
-float_type = th.DoubleTensor
+from ..model import GPModel, Param
+from ..mean_functions import Zero
+from ..likelihoods import Gaussian
+from ..util import TensorType, torch_dtype
 
 
 class FITC(GPModel):
@@ -63,22 +62,18 @@ class VFE(GPModel):
                                   mean_function, name)
         if inducing_points is not None:
             if isinstance(inducing_points, np.ndarray):
-                # inducing points are free variational parameters, no constraints
-                # However, it is possible those points are optimized to outer regions
-                inducing_points = Param(th.Tensor(inducing_points).type(float_type))
+                inducing_points = TensorType(inducing_points)
         else:
             if num_inducing is None:
                 num_inducing = np.max([len(input) // 10, 1])
             # randomly select num_inducing points from input
-            indices = np.arange(len(input))
-            np.random.shuffle(indices)
-            inducing_points = Param(th.Tensor(input[indices[:num_inducing]]).\
-                type(float_type))
+            # TODO k means centers...
+            indices = np.random.permutation(len(input))[:num_inducing]
+            inducing_points = TensorType(input[indices])
 
-        self.jitter = Param(th.Tensor([1e-4]).type(float_type), 
-                            requires_transform=True)
-        # Z stands for inducing points as standard in the literature
-        self.Z = inducing_points
+        self.jitter = Param(TensorType([1e-4]), requires_transform=True)
+        # Z stands for inducing input points as standard in the literature
+        self.Z = Param(inducing_points)
 
     def compute_loss(self):
         """
@@ -98,19 +93,18 @@ class VFE(GPModel):
         # add jitter
         Kuu = self.kernel.K(self.Z) + \
               self.jitter.transform().expand(num_inducing).diag()
-        L = cholesky(Kuu)
+        L = torch.cholesky(Kuu)
 
-        A = trtrs(L, Kuf)
-        AAT = A.mm(A.t()) / self.likelihood.variance.transform().expand_as(Kuu)
-        B = AAT + Variable(th.eye(num_inducing).type(float_type))
-        LB = cholesky(B)
+        A = torch.trtrs(Kuf, L, upper=False)[0]
+        AAT = A @ A.t() / self.likelihood.variance.transform().expand_as(Kuu)
+        B = AAT + torch.eye(num_inducing, dtype=torch_dtype)
+        LB = torch.cholesky(B)
         # divide variance at the end
-        c = trtrs(LB, A.mm(err)) \
-            / self.likelihood.variance.transform().expand(num_inducing, dim_output)
+        c = torch.trtrs(A @ err, LB, upper=False)[0] / \
+            self.likelihood.variance.transform()
 
         # Evidence lower bound
-        elbo = Variable(th.Tensor([-0.5 * dim_output * num_training
-                                   * np.log(2 * np.pi)]).type(float_type))
+        elbo = TensorType([-0.5 * dim_output * num_training * np.log(2*np.pi)])
         elbo -= dim_output * LB.diag().log().sum()
         elbo -= 0.5 * dim_output * num_training * self.likelihood.variance.transform().log()
         elbo -= 0.5 * (err.pow(2).sum() + dim_output * Kff_diag.sum()) \
@@ -126,41 +120,38 @@ class VFE(GPModel):
 
         if isinstance(input_new, np.ndarray):
             # set input_new to be volatile for inference mode
-            input_new = Variable(th.Tensor(input_new).type(float_type), volatile=True)
+            input_new = TensorType(input_new)
 
-        self.X.volatile = True
-        self.Y.volatile = True
-        self.Z.volatile = True
+        z = self.Z
+        z.requires_grad_(False)
 
-        num_inducing = self.Z.size(0)
+        num_inducing = z.size(0)
         dim_output = self.Y.size(1)
 
         # err = self.Y - self.mean_function(self.X)
         err = self.Y
-        # Kff_diag = self.kernel.Kdiag(self.X)
-        Kuf = self.kernel.K(self.Z, self.X)
+        Kuf = self.kernel.K(z, self.X)
         # add jitter
-        # Kuu = self.kernel.K(self.Z) + Variable(th.eye(num_inducing).float() * 1e-5)
-        Kuu = self.kernel.K(self.Z) + self.jitter.transform().expand(num_inducing).diag()
-        Kus = self.kernel.K(self.Z, input_new)
-        L = cholesky(Kuu)
-        A = trtrs(L, Kuf)
-        AAT = A.mm(A.t()) / self.likelihood.variance.transform().expand_as(Kuu)
-        B = AAT + Variable(th.eye(num_inducing).type(float_type))
-        LB = cholesky(B)
+        Kuu = self.kernel.K(z) + \
+            self.jitter.transform().expand(num_inducing).diag()
+        Kus = self.kernel.K(z, input_new)
+        L = torch.cholesky(Kuu)
+        A = torch.trtrs(Kuf, L, upper=False)[0]
+        AAT = A @ A.t() / self.likelihood.variance.transform().expand_as(Kuu)
+        B = AAT + torch.eye(num_inducing, dtype=torch_dtype)
+        LB = torch.cholesky(B)
         # divide variance at the end
-        c = trtrs(LB, A.mm(err)) \
-            / self.likelihood.variance.transform().expand(num_inducing, dim_output)
-        tmp1 = trtrs(L, Kus)
-        tmp2 = trtrs(LB, tmp1)
-        mean = tmp2.t().mm(c)
+        c = torch.trtrs(A @ err, LB, upper=False)[0] / \
+            self.likelihood.variance.transform()
+        tmp1 = torch.trtrs(Kus, L, upper=False)[0]
+        tmp2 = torch.trtrs(tmp1, LB, upper=False)[0]
+        mean = tmp2.t() @ c
 
         if diag:
             var = self.kernel.Kdiag(input_new) - tmp1.pow(2).sum(0).squeeze() \
                   + tmp2.pow(2).sum(0).squeeze()
             # add kronecker product later for multi-output case
         else:
-            var = self.kernel.K(input_new) + tmp2.t().mm(tmp2) \
-                  - tmp1.t().mm(tmp1)
+            var = self.kernel.K(input_new) + tmp2.t() @ tmp2 - tmp1.t() @ tmp1
         # return mean + self.mean_function(input_new), var
         return mean, var

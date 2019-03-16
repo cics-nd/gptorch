@@ -4,9 +4,11 @@
 from torch.autograd import Variable
 import torch
 import numpy as np
+from warnings import warn
 
 
 TensorType = torch.DoubleTensor
+torch_dtype = torch.double
 
 
 gamma_cof=[57.1562356658629235,-59.5979603554754912,
