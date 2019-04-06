@@ -5,6 +5,7 @@ from torch.autograd import Variable
 import torch
 import numpy as np
 from warnings import warn
+from scipy.cluster.vq import kmeans2
 
 
 TensorType = torch.DoubleTensor
@@ -30,12 +31,10 @@ def as_variable(x):
     Args:
         x (np.ndarray)
     Returns:
-        (torch.autograd.Variable(TensorType))
+        (TensorType)
     """
-    if isinstance(x, np.ndarray):
-        return Variable(TensorType(x))
-    elif isinstance(x, float):
-        return Variable(TensorType([x]))
+    warn("Deprecated.  Use as_tensor() instead.", DeprecationWarning)
+    return as_tensor(x)
 
 
 def as_tensor(x):
@@ -47,9 +46,15 @@ def as_tensor(x):
         x (np.ndarray)
     Returns:
         (TensorType)
-
     """
-    return TensorType(x)
+    if isinstance(x, torch.Tensor):
+        return x.type(TensorType)
+    if isinstance(x, np.ndarray):
+        return TensorType(x)
+    elif isinstance(x, float):
+        return TensorType([x])
+    else:
+        raise TypeError("Unsupported type {}".format(type(x)))
 
 
 def KL_Gaussian(m1, m2, S1, S2):
@@ -107,3 +112,16 @@ def gammaln(xx):
     for i in range(0,14):
         ser += gamma_cof[i]/(y + i + 1)
     return tmp+np.log(2.5066282746310005*ser/x)
+
+
+def squared_distance(x1: TensorType, x2: TensorType=None) -> TensorType:
+    """
+    Given points x1 [n1 x d1] and x2 [n2 x d2], return a [n1 x n2] matrix with
+    the pairwise squared distances between the points.
+    """
+    if x2 is None:
+        return squared_distance(x1, x1)
+    x1s = x1.pow(2).sum(1, keepdim=True)
+    x2s = x2.pow(2).sum(1, keepdim=True)
+    # Prevent negative squared distances
+    return torch.clamp(x1s + x2s.t() -2.0 * x1 @ x2.t(), min=0.0)

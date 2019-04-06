@@ -12,10 +12,10 @@ import torch
 import numpy as np
 from torch.autograd import Variable
 
-from gptorch import kernels
-from gptorch.model import GPModel, Param
-import gptorch.likelihoods
-from gptorch.functions import inverse, lt_log_determinant
+from .. import kernels
+from ..model import GPModel, Param
+from .. import likelihoods
+from ..functions import cholesky, inverse, lt_log_determinant
 from ..util import TensorType
 
 
@@ -43,7 +43,7 @@ class GPR(GPModel):
             likelihood (Likelihood): A likelihood model
         """
         if likelihood is None:
-            likelihood = gptorch.likelihoods.Gaussian()
+            likelihood = likelihoods.Gaussian()
         super().__init__(observations, input, kernel, likelihood,
                                   mean_function, name)
 
@@ -57,7 +57,7 @@ class GPR(GPModel):
         num_input = self.Y.size(0)
         dim_output = self.Y.size(1)
 
-        L = torch.cholesky(self._compute_kyy())
+        L = cholesky(self._compute_kyy())
         alpha = torch.trtrs(self.Y, L, upper=False)[0]
         const = TensorType([-0.5 * dim_output * num_input * np.log(2 * np.pi)])
         loss = 0.5 * alpha.pow(2).sum() + dim_output * lt_log_determinant(L) \
@@ -91,10 +91,11 @@ class GPR(GPModel):
 
         if isinstance(input_new, np.ndarray):
             input_new = TensorType(input_new)
+            input_new.requires_grad_(False)
 
         k_ys = self.kernel.K(self.X, input_new)
 
-        L = torch.cholesky(self._compute_kyy())
+        L = cholesky(self._compute_kyy())
         A = torch.trtrs(k_ys, L, upper=False)[0]
         V = torch.trtrs(self.Y, L, upper=False)[0]
         mean_f = A.t() @ V

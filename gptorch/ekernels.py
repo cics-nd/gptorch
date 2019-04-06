@@ -145,7 +145,7 @@ class Rbf(gptorch.kernels.Rbf):
         Lambda = length_scales.pow(2).diag().unsqueeze(0).expand_as(Xcov)
         L = cholesky(Lambda + Xcov)
         xz = Xmean.unsqueeze(2).expand(n, q, m) - Z.unsqueeze(0).expand(n, q, m)
-        Lxz = trtrs(L, xz)
+        Lxz = th.triangular_solve(xz, L, upper=False)[0]
         half_log_dets = L.diag().log().sum(1) \
                         - length_scales.log().sum().expand(n)
 

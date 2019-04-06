@@ -5,15 +5,12 @@
 
 
 from __future__ import absolute_import, print_function
-from .util import as_variable
+from .util import as_variable, TensorType, squared_distance
 from .model import Model, Param
 
 from torch.autograd import Variable
 import torch as th
 import numpy as np
-
-
-TensorType = th.DoubleTensor
 
 
 def _k_shape(X, X2):
@@ -137,26 +134,13 @@ class Stationary(Kernel):
                 Param(TensorType([length_scales]), requires_transform=True)
 
     def squared_dist(self, X, X2):
-        # if isinstance(X, (np.ndarray, th.Tensor)):
-        # # input is a data matrix; each row represents one instance
-        # X = Variable(th.Tensor(X).type(float_type))
-        # if isinstance(X2, (np.ndarray, th.Tensor)):
-        # # input is a data matrix; each row represents one instance
-        # X2 = Variable(th.Tensor(X2).type(float_type))
-
-        # X = X / self.length_scales.transform().expand_as(X)
-        X = X / self.length_scales.transform()
-        XX = th.mm(X, X.t())
-        RX = XX.diag()
-        if X2 is None:
-            return -2.0 * XX + RX + RX.unsqueeze(1)
-        else:
-            X2 = X2 / self.length_scales.transform()
-        XX2T = X.mm(X2.t())
-        Xs = X.pow(2).sum(1)
-        X2s = X2.t().pow(2).sum(0)
-        # Prevent negative squared distances
-        return th.clamp(-2.0 * XX2T + Xs.unsqueeze(1) + X2s, min=0.0)
+        """
+        Returns the SCALED squared distance between X and X2.
+        """
+        return squared_distance(X / self.length_scales.transform()) \
+            if X2 is None else \
+            squared_distance(X / self.length_scales.transform(), 
+                         X2 / self.length_scales.transform())
 
     def dist(self, X, X2):
         """

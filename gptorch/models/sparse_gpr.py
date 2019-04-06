@@ -9,15 +9,52 @@ from __future__ import absolute_import
 
 import torch
 import numpy as np
-from torch.autograd import Variable
+from torch.utils.data import TensorDataset, DataLoader
 
 from ..model import GPModel, Param
+from ..functions import cholesky
 from ..mean_functions import Zero
 from ..likelihoods import Gaussian
-from ..util import TensorType, torch_dtype
+from ..util import TensorType, torch_dtype, as_tensor  # , kmeans_centers
+from ..util import KL_Gaussian
 
 
-class FITC(GPModel):
+class _InducingPointsGP(GPModel):
+    """
+    Parent class for GPs with inducing points
+    """
+    def __init__(self, y, x, kernel, num_inducing_points=None, 
+            inducing_points=None, mean_function=None, likelihood=Gaussian()):
+        """
+        Assume Gaussian likelihood
+
+        Args:
+            observations (np.ndarray): Y, n x p
+            input (np.ndarray): X, n x q
+            kernel (gptorch.Kernel):
+            inducing_points (np.ndarray, optional): Z, m x q
+            num_inducing (int), optional): number of inducing inputs
+
+        Input, observations, and kernel must be specified, if both
+        ``inducing_points`` and ``num_inducing`` are not set, 1/10 th of total
+        points (up to 100) will be draw randomly from input as the inducing 
+        points.
+        """
+        super().__init__(y, x, kernel, likelihood, mean_function)
+
+        if inducing_points is None:
+            if num_inducing_points is None:
+                num_inducing_points = np.clip(x.shape[0] // 10, 1, 100)
+            # inducing_points = kmeans_centers(x, num_inducing_points)
+            indices = np.random.permutation(len(x))[:num_inducing_points]
+            inducing_points = TensorType(x[indices])
+        
+        # Z stands for inducing input points as standard in the literature
+        self.Z = Param(as_tensor(inducing_points))
+        self.jitter = 1.0e-6
+        
+
+class FITC(_InducingPointsGP):
     """
     Fully Independent Training Conditional approximation for GP
 
@@ -33,7 +70,7 @@ class FITC(GPModel):
     pass
 
 
-class VFE(GPModel):
+class VFE(_InducingPointsGP):
     """
     Variational Free Energy approximation for GP
 
@@ -41,40 +78,6 @@ class VFE(GPModel):
         Titsias, Michalis K. "Variational Learning of Inducing Variables
         in Sparse Gaussian Processes." AISTATS. Vol. 5. 2009.
     """
-    def __init__(self, observations, input, kernel, inducing_points=None,
-                 num_inducing=None, mean_function=None, name='variational_gp'):
-        """
-        Assume Gaussian likelihood
-
-        Args:
-            observations (np.ndarray): Y, n x p
-            input (np.ndarray): X, n x q
-            kernel (gptorch.Kernel):
-            inducing_points (np.ndarray, optional): Z, m x q
-            num_inducing (int), optional): number of inducing inputs
-
-        Input, observations, and kernel must be specified, if both
-        ``inducing_points`` and ``num_inducing`` are not set, 1/10 th of total
-         points will be draw randomly from input as the inducing points.
-        """
-        likelihood = Gaussian()
-        super(VFE, self).__init__(observations, input, kernel, likelihood,
-                                  mean_function, name)
-        if inducing_points is not None:
-            if isinstance(inducing_points, np.ndarray):
-                inducing_points = TensorType(inducing_points)
-        else:
-            if num_inducing is None:
-                num_inducing = np.max([len(input) // 10, 1])
-            # randomly select num_inducing points from input
-            # TODO k means centers...
-            indices = np.random.permutation(len(input))[:num_inducing]
-            inducing_points = TensorType(input[indices])
-
-        self.jitter = Param(TensorType([1e-4]), requires_transform=True)
-        # Z stands for inducing input points as standard in the literature
-        self.Z = Param(inducing_points)
-
     def compute_loss(self):
         """
         Computes the variational lower bound of the true log marginal likelihood
@@ -91,14 +94,14 @@ class VFE(GPModel):
         Kff_diag = self.kernel.Kdiag(self.X)
         Kuf = self.kernel.K(self.Z, self.X)
         # add jitter
-        Kuu = self.kernel.K(self.Z) + \
-              self.jitter.transform().expand(num_inducing).diag()
-        L = torch.cholesky(Kuu)
+        Kuu = self.kernel.K(self.Z) + self.jitter * torch.eye(num_inducing, 
+            dtype=torch_dtype)
+        L = cholesky(Kuu)
 
         A = torch.trtrs(Kuf, L, upper=False)[0]
         AAT = A @ A.t() / self.likelihood.variance.transform().expand_as(Kuu)
         B = AAT + torch.eye(num_inducing, dtype=torch_dtype)
-        LB = torch.cholesky(B)
+        LB = cholesky(B)
         # divide variance at the end
         c = torch.trtrs(A @ err, LB, upper=False)[0] / \
             self.likelihood.variance.transform()
@@ -132,8 +135,8 @@ class VFE(GPModel):
         err = self.Y
         Kuf = self.kernel.K(z, self.X)
         # add jitter
-        Kuu = self.kernel.K(z) + \
-            self.jitter.transform().expand(num_inducing).diag()
+        Kuu = self.kernel.K(z) + self.jitter * torch.eye(num_inducing, 
+            dtype=torch_dtype)
         Kus = self.kernel.K(z, input_new)
         L = torch.cholesky(Kuu)
         A = torch.trtrs(Kuf, L, upper=False)[0]
@@ -155,3 +158,97 @@ class VFE(GPModel):
             var = self.kernel.K(input_new) + tmp2.t() @ tmp2 - tmp1.t() @ tmp1
         # return mean + self.mean_function(input_new), var
         return mean, var
+
+
+class SVGP(_InducingPointsGP):
+    pass
+    # """
+    # Sparse variational Gaussian process.
+
+    # Sparse GP with 
+
+    # James Hensman, Nicolo Fusi, and Neil D. Lawrence,
+    # "Gaussian processes for Big Data" (2013)
+
+    # James Hensman, Alexander Matthews, and Zoubin Ghahramani, 
+    # "Scalable variational Gaussian process classification", JMLR (2015).
+    # """
+    # def __init__(self, x, y, kernel, num_inducing_points=None, 
+    #         inducing_points=None, mean_function=None, likelihood=Gaussian(), 
+    #         batch_size=None):
+    #     """
+    #     :param batch_size: How many points to process in a minibatch of 
+    #         training.  If None, no minibatches are used.
+    #     """
+    #     super().__init__(x, y, kernel, num_inducing_points=num_inducing_points, 
+    #         inducing_points=inducing_points, mean_function=mean_function, 
+    #         likelihood=likelihood)
+    #     assert batch_size is None, "Minibatching not supported yet."
+    #     self.batch_size = batch_size
+
+    #     # Parameters for the Gaussian variational posterior over the induced
+    #     # outputs:
+    #     self.induced_output_mean, self.induced_output_chol_cov = \
+    #         self._init_posterior()
+
+    # def compute_loss(self, x: TensorType=None, y: TensorType=None) \
+    #         -> TensorType:
+    #     """
+    #     :param x: batch inputs
+    #     :param y: batch outputs
+    #     """
+    #     x, y = self._get_batch(x, y)
+    #     qu_mean = self.induced_output_mean
+    #     qu_lc = self.induced_output_chol_cov.transform()
+    #     m = self.Z.shape[0]
+
+    #     # Get the mean of the marginal q(f)
+    #     k_uf = self.kernel.K(self.Z, x)
+    #     kuu = self.kernel.K(self.Z) + \
+    #         self.jitter * torch.eye(m, dtype=torch_dtype)
+    #     kuu_chol = cholesky(kuu)
+    #     a = torch.trtrs(k_uf, kuu_chol, upper=False)[0]
+    #     f_mean = a.t() @ \
+    #         torch.trtrs(qu_mean, kuu_chol, upper=False)[0]
+
+    #     # Variance of the marginal q(f)
+    #     b = torch.trtrs(q_cov_chol, kuu_chol, upper=False)[0]
+    #     f_var_1 = (a.t() @ a).sum(1)
+    #     f_var_2 = (a.t() @ b).sum(1)
+    #     f_var = (self.kernel.Kdiag(x) + f_var_1 + f_var_2)[:, None].expand(
+    #         *y.shape)
+
+    #     elbo = self.likelihood.propagate(torch.distributions.Normal(f_mean, 
+    #         f_var.sqrt()))
+        
+    #     kl = KL_Gaussian(qu_mean, qu_lc @ qu_lc.t(), 
+    #         torch.zeros(*qu_mean.shape, dtype=torch_dtype, kuu)
+    #     return elbo - kl
+        
+    # def _predict(self, input_new):
+    #     raise NotImplementedError("")
+    
+    # def _get_batch(self, x, y):
+    #     """
+    #     Get the next batch of data for training.
+    #     :return: (TensorType, TensorType) inputs, outputs
+    #     """
+    #     assert not ((x is None) ^ (y is None)), \
+    #         "Cannot provide inputs or outputs only in minibatch"
+    #     return self.X, self.Y if x is None else x, y
+
+    # def _init_posterior(self):
+    #     """
+    #     Get an initial guess at the variational posterior over the induced 
+    #     outputs.
+    #     """
+    #     # For the mean, take the nearest points in input space and steal their
+    #     # corresponding outputs.  This could be costly if X is very large...
+    #     nearest_points = np.argmin(
+    #         squared_distance(self.Z, self.X).detach().numpy(), axis=1)
+    #     mean = self.X[nearest_points]
+
+    #     # For the covariance, we'll start with 1/100 of the prior kernel
+    #     # matrix. (aka 1/10th the Cholesky).
+    #     cov = 0.1 * cholesky(self.kernel.K(self.Z))
+    #     return mean, cov
