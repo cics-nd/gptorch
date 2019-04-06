@@ -15,7 +15,7 @@ from ..model import GPModel, Param
 from ..functions import cholesky
 from ..mean_functions import Zero
 from ..likelihoods import Gaussian
-from ..util import TensorType, torch_dtype, as_tensor  # , kmeans_centers
+from ..util import TensorType, torch_dtype, as_tensor, kmeans_centers
 from ..util import KL_Gaussian
 
 
@@ -45,9 +45,10 @@ class _InducingPointsGP(GPModel):
         if inducing_points is None:
             if num_inducing_points is None:
                 num_inducing_points = np.clip(x.shape[0] // 10, 1, 100)
-            # inducing_points = kmeans_centers(x, num_inducing_points)
-            indices = np.random.permutation(len(x))[:num_inducing_points]
-            inducing_points = TensorType(x[indices])
+            inducing_points = kmeans_centers(x, num_inducing_points)
+            # indices = np.random.permutation(len(x))[:num_inducing_points]
+            # inducing_points = TensorType(x[indices])
+            print("Inducing points:\n{}".format(inducing_points))
         
         # Z stands for inducing input points as standard in the literature
         self.Z = Param(as_tensor(inducing_points))

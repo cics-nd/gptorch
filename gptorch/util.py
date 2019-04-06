@@ -71,6 +71,16 @@ def KL_Gaussian(m1, m2, S1, S2):
     raise NotImplementedError("")
 
 
+def kmeans_centers(x: np.ndarray, k: int) -> np.ndarray:
+    """
+    Use k-means clustering and find the centers of the clusters.
+    :param x: The data
+    :param k: Number of clusters
+    :return: the centers
+    """
+    return kmeans2(x, k)[0]
+
+
 def PCA(X, q):
     """
     A helpful function for linearly reducing the dimensionality of the data X
