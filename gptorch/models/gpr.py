@@ -58,7 +58,7 @@ class GPR(GPModel):
         dim_output = self.Y.size(1)
 
         L = cholesky(self._compute_kyy())
-        alpha = torch.trtrs(self.Y, L, upper=False)[0]
+        alpha = torch.triangular_solve(self.Y, L, upper=False)[0]
         const = TensorType([-0.5 * dim_output * num_input * np.log(2 * np.pi)])
         loss = 0.5 * alpha.pow(2).sum() + dim_output * lt_log_determinant(L) \
             - const
@@ -96,8 +96,8 @@ class GPR(GPModel):
         k_ys = self.kernel.K(self.X, input_new)
 
         L = cholesky(self._compute_kyy())
-        A = torch.trtrs(k_ys, L, upper=False)[0]
-        V = torch.trtrs(self.Y, L, upper=False)[0]
+        A = torch.triangular_solve(k_ys, L, upper=False)[0]
+        V = torch.triangular_solve(self.Y, L, upper=False)[0]
         mean_f = A.t() @ V
 
         if self.mean_function is not None:
