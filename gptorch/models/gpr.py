@@ -8,17 +8,15 @@ Class for Vanilla GP regression.
 """
 
 from __future__ import absolute_import
-from gptorch import kernels
-from gptorch.model import GPModel, Param
-import gptorch.likelihoods
-from gptorch.functions import trtrs, cholesky, inverse, lt_log_determinant
-
-import warnings
-import torch as th
+import torch
 import numpy as np
 from torch.autograd import Variable
 
-tensor_type = th.DoubleTensor
+from .. import kernels
+from ..model import GPModel, Param
+from .. import likelihoods
+from ..functions import cholesky, inverse, lt_log_determinant
+from ..util import TensorType
 
 
 class GPR(GPModel):
@@ -45,7 +43,7 @@ class GPR(GPModel):
             likelihood (Likelihood): A likelihood model
         """
         if likelihood is None:
-            likelihood = gptorch.likelihoods.Gaussian()
+            likelihood = likelihoods.Gaussian()
         super().__init__(observations, input, kernel, likelihood,
                                   mean_function, name)
 
@@ -60,21 +58,18 @@ class GPR(GPModel):
         dim_output = self.Y.size(1)
 
         L = cholesky(self._compute_kyy())
-        alpha = trtrs(L, self.Y)
-        const = Variable(th.Tensor([-0.5 * dim_output * num_input * \
-                                    np.log(2 * np.pi)]).type(tensor_type))
+        alpha = torch.triangular_solve(self.Y, L, upper=False)[0]
+        const = TensorType([-0.5 * dim_output * num_input * np.log(2 * np.pi)])
         loss = 0.5 * alpha.pow(2).sum() + dim_output * lt_log_determinant(L) \
             - const
         return loss
-        return None if self.mean_function is None \
-            else self.mean_function(self.X)
 
     def _compute_kyy(self):
         """
         Computes the covariance matrix over the training inputs
 
         Returns:
-            Ky (th.Tensor)
+            Ky (torch.Tensor)
         """
         num_input = self.Y.size(0)
 
@@ -95,18 +90,15 @@ class GPR(GPModel):
         """
 
         if isinstance(input_new, np.ndarray):
-            # output is a data matrix, rows correspond to the rows in input,
-            # columns are treated independently
-            input_new = Variable(th.Tensor(input_new).type(tensor_type),
-                                 requires_grad=False, volatile=True)
+            input_new = TensorType(input_new)
+            input_new.requires_grad_(False)
 
         k_ys = self.kernel.K(self.X, input_new)
-        kyy = self._compute_kyy()
 
-        L = cholesky(kyy)
-        A = trtrs(L, k_ys)
-        V = trtrs(L, self.Y)
-        mean_f = th.mm(th.transpose(A, 0, 1), V)
+        L = cholesky(self._compute_kyy())
+        A = torch.triangular_solve(k_ys, L, upper=False)[0]
+        V = torch.triangular_solve(self.Y, L, upper=False)[0]
+        mean_f = A.t() @ V
 
         if self.mean_function is not None:
             mean_f += self.mean_function(input_new)
@@ -115,9 +107,9 @@ class GPR(GPModel):
             self.kernel.K(input_new)  # Kss
 
         if diag:
-            var_f_2 = th.sum(A * A, 0)
+            var_f_2 = (A * A).sum(0)
         else:
-            var_f_2 = th.mm(A.t(), A)
+            var_f_2 = A.t() @  A
         var_f = var_f_1 - var_f_2
 
         return mean_f, var_f

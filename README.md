@@ -3,31 +3,11 @@ Gaussian processes with PyTorch
 
 ## Installation
 
-The simplest way to get set up is to use the provided `environment.yml`, i.e.,
+The simplest way to install is via [Anaconda](https://www.anaconda.com/distribution/) using the provided `environment.yml`:
 
 ```
-conda env create -f enviroment.yml
-```
-
-Otherwise, read on...
-
-### Prerequisites
-
-gptorch uses Python 3.6 and currently requires PyTorch version 0.3.1.
-We're working on moving to the current stable version of PyTorch.
-
-To install PyTorch for CPU only, use
-
-```
-conda install pytorch=0.3.1 -c pytorch
-```
-
-### 2. Install gptorch
-
-Install with
-
-```
-python setup.py install
+$ conda env create -f environment.yml
+$ source activate gptorch
 ```
 
 ## Models implemented:
@@ -37,10 +17,10 @@ python setup.py install
 
 ## To be implemented:
 
-- GPLVM (variational i.i.d.)
-- Dynamical GP-LVM/Bayesian warped GP
-- sparse GPs with SVI
-- more kernels
-- non-Gaussian likelihoods (e.g. for classification)
-- correlated outputs
-- deep GPs
+- [FITC sparse GPs](http://papers.nips.cc/paper/2857-sparse-gaussian-processes-using-pseudo-inputs.pdf)
+- [Sparse GPs with SVI](http://proceedings.mlr.press/v38/hensman15.pdf)
+- [Bayesian GPLVM](http://proceedings.mlr.press/v9/titsias10a/titsias10a.pdf)
+- [Dynamical GP-LVM](http://papers.nips.cc/paper/4330-variational-gaussian-process-dynamical-systems)/[Bayesian warped GP](http://papers.nips.cc/paper/4494-bayesian-warped-gaussian-processes)
+- Non-Gaussian likelihoods (e.g. for classification)
+- Correlated outputs
+- [Deep GPs](http://papers.nips.cc/paper/7045-doubly-stochastic-variational-inference-for-deep-gaussian-processes)

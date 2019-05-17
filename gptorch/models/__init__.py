@@ -1,2 +1,4 @@
 from __future__ import absolute_import
-from . import (gpr, sparse_gpr, gplvm)
+from .gpr import GPR
+from .sparse_gpr import VFE, SVGP
+

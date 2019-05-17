@@ -6,16 +6,19 @@
 Demonstration of GPs for regression
 """
 
+import os, sys
+sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+import torch
+import matplotlib.pyplot as plt
+import numpy as np
+
 from gptorch.models.gpr import GPR
 from gptorch.models.sparse_gpr import VFE
 from gptorch import kernels
 from gptorch.util import TensorType
 from gptorch import mean_functions
 
-# import torch as th
-import matplotlib.pyplot as plt
-import numpy as np
-
+torch.manual_seed(42)
 np.random.seed(42)
 
 # Data
@@ -29,8 +32,6 @@ if __name__ == "__main__":
     x = np.linspace(0, 1, n).reshape((-1, 1))
     y = f(x) + 0.1 * np.random.randn(n, 1)
 
-    # Model definition
-
     # Try different kernels...
     kern = kernels.Rbf(1)
     # kern = kernels.Matern32(1)
@@ -41,8 +42,8 @@ if __name__ == "__main__":
     # kern = kernels.Sum(kernels.Linear(1), kernels.Rbf(1))
 
     # Try different models:
-    # model = GPR(y, x, kern)
-    model = VFE(y, x, kern)
+    model = GPR(y, x, kern)
+    # model = VFE(y, x, kern)
     model.likelihood.variance.data = TensorType([1.0e-6])
 
     # Train
@@ -55,8 +56,8 @@ if __name__ == "__main__":
     n_samples = 5
     x_test = np.linspace(-1, 2, n_test).reshape((-1, 1))
     mu, s = model.predict_y(x_test)
-    mu, s = mu.data.numpy().flatten(), s.data.numpy().flatten()
-    y_samp = model.predict_y_samples(x_test, n_samples).data.numpy()
+    mu, s = mu.detach().numpy().flatten(), s.detach().numpy().flatten()
+    y_samp = model.predict_y_samples(x_test, n_samples).detach().numpy()
     unc = 2.0 * np.sqrt(s)
 
     # Show prediction

@@ -6,11 +6,11 @@ name: gptorch
 channels:
   - pytorch
 dependencies:
-  - pytorch==0.3.1
+  - pytorch
   - numpy>=1.10
   - scipy>=0.18
   - matplotlib>=2.1.2
   - scikit-learn>=0.19.1
-  - pytorch==0.3.1  # conda install pytorch=0.3.1 -c pytorch
   - pytest>=3.5.0
   - graphviz>=0.9
+  - jupyter
