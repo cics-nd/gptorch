@@ -8,14 +8,11 @@ requirements = [
     "scipy>=0.18",
     "matplotlib>=2.1.2",
     "scikit-learn>=0.19.1",
-    # "pytorch==0.3.1",  # conda install pytorch=0.3.1 -c pytorch
+    # "pytorch",  # conda install pytorch -c pytorch
     "pytest>=3.5.0",
     "graphviz>=0.9",
     "jupyter"
 ]
-
-# PyTorch:
-# conda install pytorch=0.3.1 -c pytorch
 
 setup(name="gptorch",
     version="0.1.0",
