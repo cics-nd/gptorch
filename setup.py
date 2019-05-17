@@ -10,7 +10,8 @@ requirements = [
     "scikit-learn>=0.19.1",
     # "pytorch==0.3.1",  # conda install pytorch=0.3.1 -c pytorch
     "pytest>=3.5.0",
-    "graphviz>=0.9"
+    "graphviz>=0.9",
+    "jupyter"
 ]
 
 # PyTorch:
