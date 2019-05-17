@@ -487,6 +487,6 @@ def studentT(x, mu, lam, nu):
 
 
 def gaussian(x, mu, var):
-    return -0.5 * np.log(2 * np.pi) - 0.5 * th.log(var) \
+    return float(-0.5 * np.log(2 * np.pi)) - 0.5 * th.log(var) \
            - 0.5 * th.pow(x - mu, 2) / var
 

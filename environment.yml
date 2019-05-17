@@ -1,0 +1,16 @@
+# File: environment.yml
+# File Created: Saturday, 9th February 2019 9:09:06 pm
+# Author: Steven Atkinson (steven@atkinson.mn)
+
+name: gptorch
+channels:
+  - pytorch
+dependencies:
+  - pytorch
+  - numpy>=1.10
+  - scipy>=0.18
+  - matplotlib>=2.1.2
+  - scikit-learn>=0.19.1
+  - pytest>=3.5.0
+  - graphviz>=0.9
+  - jupyter

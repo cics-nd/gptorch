@@ -8,23 +8,16 @@ Basic model and parameter classes for Gaussian Processes, inheriting from
 """
 
 from __future__ import absolute_import
-from .functions import SoftplusInv
-from .util import TensorType
 
 from torch.autograd import Variable, gradcheck
-from torch.nn import Module, Parameter
-from torch.nn import functional as F
-import torch as th
+import torch
 from scipy.optimize import minimize
 import numpy as np
 from time import time
-import warnings
-try:
-    # Python 2
-    from future_builtins import filter
-except ImportError:
-    # Python 3
-    pass
+from warnings import warn
+
+from .functions import SoftplusInv
+from .util import TensorType
 
 # TODO: samples from the posterior
 
@@ -41,7 +34,7 @@ def _addindent(s_, numSpaces):
     return s
 
 
-class Model(Module):
+class Model(torch.nn.Module):
     """
     Customized Model class for all GP objects
     """
@@ -146,14 +139,14 @@ class Model(Module):
     def extract_params(self):
         """
         Returns:
-            (Tuple of Variables)
+            (Tuple of TensorTypes)
         """
         return tuple([x for x in self.parameters()])
 
     def expand_params(self, *args):
         """
         Args:
-            args (tuple of Variables): (Get from self.extract_params())
+            args (tuple of TensorTypes): (Get from self.extract_params())
         """
         for arg, (param_name, param) in zip(args, self.named_parameters()):
             if isinstance(arg, Param):
@@ -161,14 +154,13 @@ class Model(Module):
             elif isinstance(arg, np.ndarray):
                 raise NotImplementedError(
                     "Unresolved issues with expanding numpy arrays")
-                # param.data = th.Tensor(arg).type(float_type)
 
     def loss(self, *args):
         """
         Loss, given args to be expanded into the model.
 
         Args:
-            args (pointer to a tuple of Variables):
+            args (pointer to a tuple of TensorTypes):
             (Get from self.extract_params())
         """
         self.expand_params(*args)
@@ -189,33 +181,34 @@ class Model(Module):
              (bool) whether the gradcheck passed (true = good)
         """
         if verbose:
-            warnings.warn("Verbose not yet figured out")
+            warn("Verbose not yet figured out")
         return gradcheck(self.loss, self.extract_params(), eps=eps, atol=atol,
                          rtol=rtol)
 
 
-class Param(Parameter):
+class Param(torch.nn.Parameter):
     """
-    Customized Parameter class
-    Add constraints (using transform) to parameters.
-    Currently only support positive constraints, e.g. for variance
-
-    prior is an instance of the gptorch.Prior class.
+    Customized Parameter class extending the PyTorch Parameter class.
+    Its main purpose is to include the following additional functionality:
+    1) The .transform() member function, in order to impose constraints on the 
+        parameter.
+    2) the .prior member, for incorporation into joint log-probabilities (e.g. 
+        for training)
     """
     def __new__(cls, data=None, requires_grad=True, requires_transform=False,
                 prior=None):
         if requires_transform:
             data = Param._transform_log(data, forward=False)
-        return super(Parameter, cls).__new__(cls, data,
-                                             requires_grad=requires_grad)
+        return super(Param, cls).__new__(cls, data, 
+            requires_grad=requires_grad)
 
     def __init__(self, data, requires_grad=True, requires_transform=False):
+        super(Param, self).__init__()
         self.requires_transform = requires_transform
         self.prior = None
-        super(Param, self).__init__(data, requires_grad=requires_grad)
 
     def transform(self):
-        # Avoid in-place operation for Variable, using clone method  ???
+        # Avoid in-place operation for Tensor, using clone method  ???
         if self.requires_transform:
             return self._transform_log(self.clone(), forward=True)
         else:
@@ -227,14 +220,14 @@ class Param(Parameter):
     @staticmethod
     def _transform_log(x, forward):
         if forward:
-            return th.exp(x)
+            return torch.exp(x)
         else:
-            return th.log(x)
+            return torch.log(x)
 
     @staticmethod
     def _transform_softplus(x, forward):
         if forward:
-            return F.softplus(x, threshold=35)
+            return torch.nn.functional.softplus(x, threshold=35)
         else:
             return SoftplusInv(x)
 
@@ -265,22 +258,18 @@ class GPModel(Model):
         assert mean_function is None, "Mean functions not supported"
         self.mean_function = mean_function
 
-        assert(type(y) is np.ndarray or
-               type(y) is Variable), "observations must be either " \
-                                                "a numpy array or a torch " \
-                                                "Variable."
-        if isinstance(y, np.ndarray):
-            y = Variable(TensorType(y),
-                                    requires_grad=False)
-
-        assert (type(x) is np.ndarray or
-                type(x) is Variable), \
-            "x must be either a numpy array or a torch Variable."
+        allowed_data_types = (np.ndarray, TensorType)
+        assert type(x) in allowed_data_types, \
+            "x must be one of {}".format(allowed_data_types)
         if isinstance(x, np.ndarray):
-            # x is a data matrix; each row represents one instance
-            x = Variable(TensorType(x), requires_grad=False)
-        self.Y = y
-        self.X = x
+            x = TensorType(x)
+        assert type(y) in allowed_data_types, \
+            "y must be one of {}".format(allowed_data_types)
+        if isinstance(y, np.ndarray):
+            y = TensorType(y)
+        x.requires_grad_(False)
+        y.requires_grad_(False)
+        self.X, self.Y = x, y
         self.__class__.__name__ = name
 
     def compute_loss(self):
@@ -324,36 +313,36 @@ class GPModel(Model):
         parameters = filter(lambda p: p.requires_grad, self.parameters())
 
         if method == 'SGD':
-            self.optimizer = th.optim.SGD(parameters, lr=0.05, momentum=0.9)
+            self.optimizer = torch.optim.SGD(parameters, lr=0.05, momentum=0.9)
         elif method == 'Adam':
-            self.optimizer = th.optim.Adam(parameters, lr=0.001,
+            self.optimizer = torch.optim.Adam(parameters, lr=0.001,
                                            betas=(0.9, 0.999), eps=1e-06, weight_decay=0.0)
         elif method == 'LBFGS':
             if learning_rate is None:
                 learning_rate = 1.0
-            self.optimizer = th.optim.LBFGS(parameters, lr=learning_rate,
+            self.optimizer = torch.optim.LBFGS(parameters, lr=learning_rate,
                                             max_iter=5, max_eval=None,
                                             tolerance_grad=1e-05,
                                             tolerance_change=1e-09,
                                             history_size=50,
                                             line_search_fn=None)
         elif method == 'Adadelta':
-            self.optimizer = th.optim.Adadelta(
+            self.optimizer = torch.optim.Adadelta(
                 parameters, lr=1.0, rho=0.9, eps=1e-06, weight_decay=0.00001)
         elif method == 'Adagrad':
-            self.optimizer = th.optim.Adagrad(
+            self.optimizer = torch.optim.Adagrad(
                 parameters, lr=0.01, lr_decay=0, weight_decay=0)
         elif method == 'Adamax':
-            self.optimizer = th.optim.Adamax(
+            self.optimizer = torch.optim.Adamax(
                 parameters, lr=0.002, betas=(0.9, 0.999), eps=1e-08, weight_decay=0)
         elif method == 'ASGD':
-            self.optimizer = th.optim.ASGD(
+            self.optimizer = torch.optim.ASGD(
                 parameters, lr=0.01, lambd=0.0001, alpha=0.75, t0=1000000.0, weight_decay=0)
         elif method == 'RMSprop':
-            self.optimizer = th.optim.RMSprop(
+            self.optimizer = torch.optim.RMSprop(
                 parameters, lr=0.01, alpha=0.99, eps=1e-08, weight_decay=0.00, momentum=0.01, centered=False)
         elif method == 'Rprop':
-            self.optimizer = th.optim.Rprop(
+            self.optimizer = torch.optim.Rprop(
                 parameters, lr=0.01, etas=(0.5, 1.2), step_sizes=(1e-06, 50))
         # scipy.optimize.minimize
         # suggest to use L-BFGS-B, BFGS
@@ -501,8 +490,8 @@ class GPModel(Model):
         :return:
         """
         mu, sigma = self.predict_y(input_new, False)
-        chol_s = th.potrf(sigma, upper=False)
-        samp = mu + th.stack([th.mm(chol_s, Variable(TensorType(r)))
+        chol_s = torch.cholesky(sigma)
+        samp = mu + torch.stack([torch.mm(chol_s, Variable(TensorType(r)))
                               for r in np.random.randn(n_samples, *mu.size())])
         return samp
 
