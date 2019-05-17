@@ -12,9 +12,12 @@ from unittest import TestCase
 import pytest
 import numpy as np
 from torch.autograd import Variable
+import os
 
 from gptorch import kernels
 from gptorch.util import TensorType
+
+data_dir = os.path.join(os.path.dirname(__file__), "data", "kernels")
 
 
 def as_variable(x: np.array) -> Variable:
@@ -24,18 +27,18 @@ def as_variable(x: np.array) -> Variable:
 class Kern(object):
     def setUp(self, kernel_type):
         self.kernel_type = kernel_type
-        self.x1 = as_variable(np.load("data/kernels/x1.npy"))
-        self.x2 = as_variable(np.load("data/kernels/x2.npy"))
+        self.x1 = as_variable(np.load(os.path.join(data_dir, "x1.npy")))
+        self.x2 = as_variable(np.load(os.path.join(data_dir, "x2.npy")))
         self.n1, self.d1 = self.x1.data.numpy().shape
         self.n2, self.d2 = self.x2.data.numpy().shape
         self.kern = self.kernel_type(self.d1)
         self.kern_str = self.kern.__class__.__name__
-        self.kx_expected = np.load("data/kernels/{}_kx.npy".format(
-            self.kern_str))
-        self.kx2_expected = np.load("data/kernels/{}_kx2.npy".format(
-            self.kern_str))
-        self.kdiag_expected = np.load("data/kernels/{}_kdiag.npy".format(
-            self.kern_str))
+        self.kx_expected = np.load(os.path.join(data_dir, "{}_kx.npy".format(
+            self.kern_str)))
+        self.kx2_expected = np.load(os.path.join(data_dir, "{}_kx2.npy".format(
+            self.kern_str)))
+        self.kdiag_expected = np.load(os.path.join(data_dir, 
+            "{}_kdiag.npy".format(self.kern_str)))
 
     def test_K(self):
         """
@@ -82,15 +85,16 @@ class Stationary(Kern):
 class ARD(Stationary):
     def setUp(self, kernel_type):
         super().setUp(kernel_type)
-        self.ard_length_scales = np.load("data/kernels/ard_length_scales.npy")
+        self.ard_length_scales = np.load(os.path.join(data_dir, 
+            "ard_length_scales.npy"))
         self.kern_ard = self.kernel_type(self.d1, ARD=True, 
             length_scales=self.ard_length_scales)
-        self.kx_ard_expected = np.load("data/kernels/{}_kx_ard.npy".format(
-            self.kern_str))
-        self.kx2_ard_expected = np.load("data/kernels/{}_kx2_ard.npy".format(
-            self.kern_str))
-        self.kdiag_ard_expected = np.load(
-            "data/kernels/{}_kdiag_ard.npy".format(self.kern_str))
+        self.kx_ard_expected = np.load(os.path.join(data_dir, 
+            "{}_kx_ard.npy".format(self.kern_str)))
+        self.kx2_ard_expected = np.load(os.path.join(data_dir, 
+            "{}_kx2_ard.npy".format(self.kern_str)))
+        self.kdiag_ard_expected = np.load(os.path.join(data_dir,
+            "{}_kdiag_ard.npy".format(self.kern_str)))
 
     def test_K(self):
         super().test_K()
