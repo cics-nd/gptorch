@@ -14,6 +14,7 @@ from torch.autograd import Variable
 import torch
 import numpy as np
 from unittest import TestCase
+import os
 
 # For computations that are limited by computational precision
 comp_tol = 1.0e-12
@@ -23,25 +24,24 @@ mc_tol = 0.2
 
 
 def _get_matrix(s):
-    x_np = np.loadtxt('data/densities/' + s + '.dat')
+    x_np = np.loadtxt(os.path.join(os.path.dirname(__file__), 'data', 
+        'densities', s + '.dat'))
     if x_np.size == 1:
         x_np = x_np.reshape((1))
     return util.as_variable(x_np)
 
 
 def _err(measured, target, relative=True):
-    err_abs = torch.abs(measured - target)
+    err = torch.abs(measured - target)
     if relative:
-        err_rel = err_abs / target
-        return torch.max(err_rel).data.numpy()[0]
-    else:
-        return torch.max(err_abs).data.numpy()[0]
+        err /= target
+    return torch.max(err).data.numpy()
 
 
 class TestGaussianMultivariateDiagonal(TestCase):
     @staticmethod
     def _get_matrix(s):
-        return _get_matrix('MultivariateGaussianDiagonal/' + s)
+        return _get_matrix(os.path.join('MultivariateGaussianDiagonal/', s))
 
     @staticmethod
     def _get_mu_sigma():
