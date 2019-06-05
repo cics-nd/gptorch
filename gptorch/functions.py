@@ -12,7 +12,7 @@ from torch.nn import functional as F
 import numpy as np
     
 
-def jit_op(op, x: torch.Tensor, max_tries: int=10, verbose: bool=True) \
+def jit_op(op, x: torch.Tensor, max_tries: int=10, verbose: bool=False) \
         -> torch.Tensor:
     """
     Attempt a potentially-unstable linear algebra operation on a matrix.
