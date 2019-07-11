@@ -1,16 +1,20 @@
-#
-# Apr 13, 2017  Yinhao Zhu
-#
-# Implementation of kernels for GP
+# File: kernels.py
+# File created: Apr 13, 2017 
+# Author: Yinhao Zhu (yzhu10@nd.edu)
+
+"""
+Implementation of kernels for GP
+"""
 
 
 from __future__ import absolute_import, print_function
-from .util import as_variable, TensorType, squared_distance
-from .model import Model, Param
 
 from torch.autograd import Variable
 import torch as th
 import numpy as np
+
+from .util import as_variable, TensorType
+from .model import Model, Param
 
 
 def _k_shape(X, X2):
