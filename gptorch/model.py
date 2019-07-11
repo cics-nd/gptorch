@@ -7,8 +7,6 @@ Basic model and parameter classes for Gaussian Processes, inheriting from
 :class:`torch.nn.Module` and :class:`torch.nn.Parameter` respectively.
 """
 
-from __future__ import absolute_import
-
 from torch.autograd import Variable, gradcheck
 import torch
 from scipy.optimize import minimize
@@ -18,8 +16,7 @@ from warnings import warn
 
 from .functions import SoftplusInv
 from .util import TensorType
-
-# TODO: samples from the posterior
+from .param import Param
 
 
 def _addindent(s_, numSpaces):
@@ -184,52 +181,6 @@ class Model(torch.nn.Module):
             warn("Verbose not yet figured out")
         return gradcheck(self.loss, self.extract_params(), eps=eps, atol=atol,
                          rtol=rtol)
-
-
-class Param(torch.nn.Parameter):
-    """
-    Customized Parameter class extending the PyTorch Parameter class.
-    Its main purpose is to include the following additional functionality:
-    1) The .transform() member function, in order to impose constraints on the 
-        parameter.
-    2) the .prior member, for incorporation into joint log-probabilities (e.g. 
-        for training)
-    """
-    def __new__(cls, data=None, requires_grad=True, requires_transform=False,
-                prior=None):
-        if requires_transform:
-            data = Param._transform_log(data, forward=False)
-        return super(Param, cls).__new__(cls, data, 
-            requires_grad=requires_grad)
-
-    def __init__(self, data, requires_grad=True, requires_transform=False):
-        super(Param, self).__init__()
-        self.requires_transform = requires_transform
-        self.prior = None
-
-    def transform(self):
-        # Avoid in-place operation for Tensor, using clone method  ???
-        if self.requires_transform:
-            return self._transform_log(self.clone(), forward=True)
-        else:
-            return self
-
-    def __repr__(self):
-        return 'Parameter containing:' + self.data.__repr__()
-
-    @staticmethod
-    def _transform_log(x, forward):
-        if forward:
-            return torch.exp(x)
-        else:
-            return torch.log(x)
-
-    @staticmethod
-    def _transform_softplus(x, forward):
-        if forward:
-            return torch.nn.functional.softplus(x, threshold=35)
-        else:
-            return SoftplusInv(x)
 
 
 class GPModel(Model):

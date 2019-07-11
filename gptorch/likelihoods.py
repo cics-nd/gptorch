@@ -10,10 +10,13 @@ from .model import Model, Param
 from torch.nn import Parameter
 import torch as th
 
+from .settings import DefaultPositiveTransform
+from .util import TensorType
+
 # from functions import SoftplusInv
 # from torch.nn import functional as F
 
-float_type = th.DoubleTensor
+float_type = TensorType
 
 
 class Likelihood(Model):
@@ -53,7 +56,7 @@ class Gaussian(Likelihood):
     def __init__(self, variance=1.0):
         super(Gaussian, self).__init__()
         self.variance = Param(th.Tensor([variance]).type(float_type),
-                              requires_transform=True)
+                              transform=DefaultPositiveTransform())
 
     def logp(self, F, Y):
         """

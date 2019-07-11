@@ -7,6 +7,7 @@
 from __future__ import absolute_import, print_function
 from .util import as_variable, TensorType, squared_distance
 from .model import Model, Param
+from .settings import DefaultPositiveTransform
 
 from torch.autograd import Variable
 import torch as th
@@ -64,7 +65,8 @@ class Static(Kernel):
 
     def __init__(self, input_dim, variance=1.0):
         super().__init__(input_dim)
-        self.variance = Param(TensorType([variance]), requires_transform=True)
+        self.variance = Param(TensorType([variance]), 
+            transform=DefaultPositiveTransform())
 
     def Kdiag(self, X):
         return self.variance.transform().expand(X.size(0))
@@ -115,7 +117,8 @@ class Stationary(Kernel):
         """
         super(Stationary, self).__init__(input_dim)
         # self.variance_param = Parameter(th.FloatTensor(SoftplusInv(variance)))
-        self.variance = Param(TensorType([variance]), requires_transform=True)
+        self.variance = Param(TensorType([variance]), 
+            transform=DefaultPositiveTransform())
         self.ARD = ARD
         if ARD:
             if length_scales is None:
@@ -126,12 +129,14 @@ class Stationary(Kernel):
                 length_scales = length_scales * np.ones(input_dim)
 
             self.length_scales = \
-                Param(TensorType(length_scales), requires_transform=True)
+                Param(TensorType(length_scales), 
+                transform=DefaultPositiveTransform())
         else:
             if length_scales is None:
                 length_scales = 1.0
             self.length_scales = \
-                Param(TensorType([length_scales]), requires_transform=True)
+                Param(TensorType([length_scales]), 
+                transform=DefaultPositiveTransform())
 
     def squared_dist(self, X, X2):
         """
@@ -220,7 +225,8 @@ class Linear(Kernel):
         super().__init__(input_dim)
 
         variance, self.ARD = self._validate_ard_shape(variance, ARD)
-        self.variance = Param(TensorType(variance), requires_transform=True)
+        self.variance = Param(TensorType(variance), 
+            transform=DefaultPositiveTransform())
 
     def K(self, X, X2=None):
         if X2 is None:
