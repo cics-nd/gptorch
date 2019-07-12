@@ -16,7 +16,7 @@ import numpy as np
 from time import time
 from warnings import warn
 
-from .functions import SoftplusInv
+from .functions import SoftplusInv, cholesky
 from .util import TensorType
 
 # TODO: samples from the posterior
@@ -490,7 +490,7 @@ class GPModel(Model):
         :return:
         """
         mu, sigma = self.predict_y(input_new, False)
-        chol_s = torch.cholesky(sigma)
+        chol_s = cholesky(sigma)
         samp = mu + torch.stack([torch.mm(chol_s, Variable(TensorType(r)))
                               for r in np.random.randn(n_samples, *mu.size())])
         return samp
