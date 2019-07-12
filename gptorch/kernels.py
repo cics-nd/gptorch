@@ -13,7 +13,7 @@ from torch.autograd import Variable
 import torch as th
 import numpy as np
 
-from .util import as_variable, TensorType
+from .util import as_variable, TensorType, squared_distance
 from .model import Model, Param
 
 
@@ -35,6 +35,12 @@ class Kernel(Model):
         self.input_dim = int(input_dim)
         # self.name_kernel = name
         super(Kernel, self).__init__()
+
+    def __add__(self, other):
+        return Sum(self, other)
+
+    def __mul__(self, other):
+        return Product(self, other)
 
     def _validate_ard_shape(self, x, ARD=None):
         """
