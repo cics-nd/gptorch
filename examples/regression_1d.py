@@ -23,7 +23,7 @@ np.random.seed(42)
 
 # Data
 def f(x):
-    return np.sin(2. * np.pi * x) + np.cos(3.5 * np.pi * x) - 3.0 * x
+    return np.sin(2. * np.pi * x) + np.cos(3.5 * np.pi * x) - 3.0 * x + 5.0
 
 
 if __name__ == "__main__":
@@ -33,13 +33,13 @@ if __name__ == "__main__":
     y = f(x) + 0.1 * np.random.randn(n, 1)
 
     # Try different kernels...
-    kern = kernels.Rbf(1)
+    # kern = kernels.Rbf(1)
     # kern = kernels.Matern32(1)
     # kern = kernels.Matern52(1)
     # kern = kernels.Exp(1)
     # kern = kernels.Constant(1)
     # kern = kernels.Linear(1)
-    # kern = kernels.Sum(kernels.Linear(1), kernels.Rbf(1))
+    kern = kernels.Linear(1) + kernels.Rbf(1) + kernels.Constant(1)
 
     # Try different models:
     model = GPR(y, x, kern)

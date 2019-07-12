@@ -36,6 +36,12 @@ class Kernel(Model):
         # self.name_kernel = name
         super(Kernel, self).__init__()
 
+    def __add__(self, other):
+        return Sum(self, other)
+
+    def __mul__(self, other):
+        return Product(self, other)
+
     def _validate_ard_shape(self, x, ARD=None):
         """
         Validates the shape of a potentially ARD hyperparameter
