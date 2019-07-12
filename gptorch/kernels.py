@@ -13,7 +13,7 @@ from torch.autograd import Variable
 import torch as th
 import numpy as np
 
-from .util import as_variable, TensorType
+from .util import as_variable, TensorType, squared_distance
 from .model import Model, Param
 
 
