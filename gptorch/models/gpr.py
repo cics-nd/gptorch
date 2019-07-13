@@ -15,7 +15,7 @@ from torch.autograd import Variable
 from .. import kernels
 from ..model import GPModel, Param
 from .. import likelihoods
-from ..functions import cholesky, inverse, lt_log_determinant
+from ..functions import cholesky, inverse, lt_log_determinant, trtrs
 from ..util import TensorType
 
 
@@ -58,7 +58,7 @@ class GPR(GPModel):
         dim_output = self.Y.size(1)
 
         L = cholesky(self._compute_kyy())
-        alpha = torch.triangular_solve(self.Y, L, upper=False)[0]
+        alpha = trtrs(self.Y, L)
         const = TensorType([-0.5 * dim_output * num_input * np.log(2 * np.pi)])
         loss = 0.5 * alpha.pow(2).sum() + dim_output * lt_log_determinant(L) \
             - const
@@ -77,7 +77,7 @@ class GPR(GPModel):
         (self.likelihood.variance.transform()).expand(
             num_input, num_input).diag().diag()
 
-    def _predict(self, input_new, diag, full_cov_size_limit=10000):
+    def _predict(self, input_new: TensorType, diag=True):
         """
         This method computes
 
@@ -86,18 +86,13 @@ class GPR(GPModel):
 
         where F* are points on the GP at input_new, Y are observations at the
         input X of the training data.
-        :param input_new: assume to be numpy array, but should be in two dimensional
+        :param input_new: test inputs; should be two-dimensional
         """
-
-        if isinstance(input_new, np.ndarray):
-            input_new = TensorType(input_new)
-            input_new.requires_grad_(False)
-
         k_ys = self.kernel.K(self.X, input_new)
 
         L = cholesky(self._compute_kyy())
-        A = torch.triangular_solve(k_ys, L, upper=False)[0]
-        V = torch.triangular_solve(self.Y, L, upper=False)[0]
+        A = trtrs(k_ys, L)
+        V = trtrs(self.Y, L)
         mean_f = A.t() @ V
 
         if self.mean_function is not None:

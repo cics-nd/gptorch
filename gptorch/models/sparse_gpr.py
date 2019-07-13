@@ -12,7 +12,7 @@ import numpy as np
 from torch.utils.data import TensorDataset, DataLoader
 
 from ..model import GPModel, Param
-from ..functions import cholesky
+from ..functions import cholesky, trtrs
 from ..mean_functions import Zero
 from ..likelihoods import Gaussian
 from ..util import TensorType, torch_dtype, as_tensor, kmeans_centers
@@ -40,6 +40,7 @@ class _InducingPointsGP(GPModel):
         points (up to 100) will be draw randomly from input as the inducing 
         points.
         """
+        
         super().__init__(y, x, kernel, likelihood, mean_function)
 
         if inducing_points is None:
@@ -99,13 +100,12 @@ class VFE(_InducingPointsGP):
             dtype=torch_dtype)
         L = cholesky(Kuu)
 
-        A = torch.trtrs(Kuf, L, upper=False)[0]
+        A = trtrs(Kuf, L)
         AAT = A @ A.t() / self.likelihood.variance.transform().expand_as(Kuu)
         B = AAT + torch.eye(num_inducing, dtype=torch_dtype)
         LB = cholesky(B)
         # divide variance at the end
-        c = torch.trtrs(A @ err, LB, upper=False)[0] / \
-            self.likelihood.variance.transform()
+        c = trtrs(A @ err, LB) / self.likelihood.variance.transform()
 
         # Evidence lower bound
         elbo = TensorType([-0.5 * dim_output * num_training * np.log(2*np.pi)])
@@ -118,13 +118,12 @@ class VFE(_InducingPointsGP):
 
         return - elbo
 
-    def _predict(self, input_new, diag=True):
-        # following GPflow implementation
-        # integrating the inducing variables out
+    def _predict(self, input_new: TensorType, diag=True):
+        """
+        Compute posterior p(f*|y), integrating out induced outputs' posterior.
 
-        if isinstance(input_new, np.ndarray):
-            # set input_new to be volatile for inference mode
-            input_new = TensorType(input_new)
+        :return: (mean, var/cov)
+        """
 
         z = self.Z
         z.requires_grad_(False)
@@ -140,15 +139,14 @@ class VFE(_InducingPointsGP):
             dtype=torch_dtype)
         Kus = self.kernel.K(z, input_new)
         L = torch.cholesky(Kuu)
-        A = torch.trtrs(Kuf, L, upper=False)[0]
+        A = trtrs(Kuf, L)
         AAT = A @ A.t() / self.likelihood.variance.transform().expand_as(Kuu)
         B = AAT + torch.eye(num_inducing, dtype=torch_dtype)
         LB = torch.cholesky(B)
         # divide variance at the end
-        c = torch.trtrs(A @ err, LB, upper=False)[0] / \
-            self.likelihood.variance.transform()
-        tmp1 = torch.trtrs(Kus, L, upper=False)[0]
-        tmp2 = torch.trtrs(tmp1, LB, upper=False)[0]
+        c = trtrs(A @ err, LB) / self.likelihood.variance.transform()
+        tmp1 = trtrs(Kus, L)
+        tmp2 = trtrs(tmp1, LB)
         mean = tmp2.t() @ c
 
         if diag:
