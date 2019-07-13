@@ -10,14 +10,25 @@ from .model import Model, Param
 from torch.nn import Parameter
 import torch as th
 
-# from functions import SoftplusInv
-# from torch.nn import functional as F
-
-float_type = th.DoubleTensor
+from .settings import DefaultPositiveTransform
+from .util import TensorType
 
 
 class Likelihood(Model):
+    """
+    Probabilities that conventionally factorize across data.
+    Typically used as the "second stage" of a GP model that goes 
+    x -(GP)-> f -(likelihood)-> y
+    x = inputs
+    f = latent outputs
+    y = observed outputs
 
+    We typically have two uses for these:
+    1) Do the marginalization in p(y|x) = \int p(y|f) p(f|x) df 
+        (e.g. predictions)
+    2) Do the marginalization in logp(y) = \int logp(y|f) p(f) df
+        (e.g. variational inference)
+    """
     def __init__(self):
         super(Likelihood, self).__init__()
 
@@ -40,12 +51,14 @@ class Likelihood(Model):
     def forward(self):
         return None
 
-    # def __repr__(self):
-    #     tmpstr = self.__class__.__name__ + ' (\n'
-    #     for name, param in self._parameters.items():
-    #         tmpstr = tmpstr + name + str(param.data) + '\n'
-    #     tmpstr = tmpstr + ')'
-    #     return tmpstr
+    @abc.abstractmethod
+    def propagate_log(self, qf, targets):
+        """
+        Evaluate the marginal log-likelihood at the targets:
+        <log p(y|f)>_q(f)
+        Used in variational inference.
+        """
+        raise NotImplementedError("Implement quadrature fallback")
 
 
 class Gaussian(Likelihood):
@@ -53,7 +66,7 @@ class Gaussian(Likelihood):
     def __init__(self, variance=1.0):
         super(Gaussian, self).__init__()
         self.variance = Param(th.Tensor([variance]).type(float_type),
-                              requires_transform=True)
+                              transform=DefaultPositiveTransform())
 
     def logp(self, F, Y):
         """

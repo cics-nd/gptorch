@@ -10,13 +10,15 @@ from __future__ import absolute_import
 import torch
 import numpy as np
 from torch.utils.data import TensorDataset, DataLoader
+from torch.distributions.transforms import LowerCholeskyTransform
 
 from ..model import GPModel, Param
-from ..functions import cholesky
+from ..functions import cholesky, trtrs
 from ..mean_functions import Zero
 from ..likelihoods import Gaussian
 from ..util import TensorType, torch_dtype, as_tensor, kmeans_centers
 from ..util import KL_Gaussian
+from .gpr import GPR
 
 
 class _InducingPointsGP(GPModel):
@@ -53,6 +55,13 @@ class _InducingPointsGP(GPModel):
         # Z stands for inducing input points as standard in the literature
         self.Z = Param(as_tensor(inducing_points))
         self.jitter = 1.0e-6
+
+    @property
+    def num_inducing(self) -> int:
+        """
+        Number of inducing points
+        """
+        return self.Z.shape[0]
         
 
 class FITC(_InducingPointsGP):
@@ -162,94 +171,114 @@ class VFE(_InducingPointsGP):
 
 
 class SVGP(_InducingPointsGP):
-    pass
-    # """
-    # Sparse variational Gaussian process.
+    """
+    Sparse variational Gaussian process.
 
-    # Sparse GP with 
+    James Hensman, Nicolo Fusi, and Neil D. Lawrence,
+    "Gaussian processes for Big Data" (2013)
 
-    # James Hensman, Nicolo Fusi, and Neil D. Lawrence,
-    # "Gaussian processes for Big Data" (2013)
+    James Hensman, Alexander Matthews, and Zoubin Ghahramani, 
+    "Scalable variational Gaussian process classification", JMLR (2015).
+    """
+    def __init__(self, y, x, kernel, num_inducing_points=None, 
+            inducing_points=None, mean_function=None, likelihood=Gaussian(), 
+            batch_size=None):
+        """
+        :param batch_size: How many points to process in a minibatch of 
+            training.  If None, no minibatches are used.
+        """
+        super().__init__(y, x, kernel, num_inducing_points=num_inducing_points, 
+            inducing_points=inducing_points, mean_function=mean_function, 
+            likelihood=likelihood)
+        assert batch_size is None, "Minibatching not supported yet."
+        self.batch_size = batch_size
 
-    # James Hensman, Alexander Matthews, and Zoubin Ghahramani, 
-    # "Scalable variational Gaussian process classification", JMLR (2015).
-    # """
-    # def __init__(self, x, y, kernel, num_inducing_points=None, 
-    #         inducing_points=None, mean_function=None, likelihood=Gaussian(), 
-    #         batch_size=None):
-    #     """
-    #     :param batch_size: How many points to process in a minibatch of 
-    #         training.  If None, no minibatches are used.
-    #     """
-    #     super().__init__(x, y, kernel, num_inducing_points=num_inducing_points, 
-    #         inducing_points=inducing_points, mean_function=mean_function, 
-    #         likelihood=likelihood)
-    #     assert batch_size is None, "Minibatching not supported yet."
-    #     self.batch_size = batch_size
+        # Parameters for the Gaussian variational posterior over the induced
+        # outputs.
+        # Note: induced_output_mean does NOT include the contribution due to the
+        # mean function.
+        self.induced_output_mean, self.induced_output_chol_cov = \
+            self._init_posterior()
 
-    #     # Parameters for the Gaussian variational posterior over the induced
-    #     # outputs:
-    #     self.induced_output_mean, self.induced_output_chol_cov = \
-    #         self._init_posterior()
+    def compute_loss(self):
+        """
+        TODO minibatches
+        """
+        chol_kuu = cholesky(self.kernel.K(self.Z))
 
-    # def compute_loss(self, x: TensorType=None, y: TensorType=None) \
-    #         -> TensorType:
-    #     """
-    #     :param x: batch inputs
-    #     :param y: batch outputs
-    #     """
-    #     x, y = self._get_batch(x, y)
-    #     qu_mean = self.induced_output_mean
-    #     qu_lc = self.induced_output_chol_cov.transform()
-    #     m = self.Z.shape[0]
-
-    #     # Get the mean of the marginal q(f)
-    #     k_uf = self.kernel.K(self.Z, x)
-    #     kuu = self.kernel.K(self.Z) + \
-    #         self.jitter * torch.eye(m, dtype=torch_dtype)
-    #     kuu_chol = cholesky(kuu)
-    #     a = torch.trtrs(k_uf, kuu_chol, upper=False)[0]
-    #     f_mean = a.t() @ \
-    #         torch.trtrs(qu_mean, kuu_chol, upper=False)[0]
-
-    #     # Variance of the marginal q(f)
-    #     b = torch.trtrs(q_cov_chol, kuu_chol, upper=False)[0]
-    #     f_var_1 = (a.t() @ a).sum(1)
-    #     f_var_2 = (a.t() @ b).sum(1)
-    #     f_var = (self.kernel.Kdiag(x) + f_var_1 + f_var_2)[:, None].expand(
-    #         *y.shape)
-
-    #     elbo = self.likelihood.propagate(torch.distributions.Normal(f_mean, 
-    #         f_var.sqrt()))
+        f_mean, f_var = self._predict(self.X, diag=True, chol_kuu=chol_kuu)
+        q_marginal = torch.distributions.Normal(f_mean, f_var.sqrt())  # q(f)
+        marginal_log_likelihood = self.likelihood.propagate(q_marginal)
         
-    #     kl = KL_Gaussian(qu_mean, qu_lc @ qu_lc.t(), 
-    #         torch.zeros(*qu_mean.shape, dtype=torch_dtype, kuu)
-    #     return elbo - kl
+        mu_xu = self.mean_function(self.Z)
+        qu_mean = self.induced_output_mean + mu_xu
+        qu_lc = self.induced_output_chol_cov.transform()
+        qu = torch.distributions.MultivariateNormal(qu_mean, scale_tril=qu_lc)
+        pu = torch.distributions.MultivariateNormal(mu_xu, scale_tril=chol_kuu)
         
-    # def _predict(self, input_new):
-    #     raise NotImplementedError("")
-    
-    # def _get_batch(self, x, y):
-    #     """
-    #     Get the next batch of data for training.
-    #     :return: (TensorType, TensorType) inputs, outputs
-    #     """
-    #     assert not ((x is None) ^ (y is None)), \
-    #         "Cannot provide inputs or outputs only in minibatch"
-    #     return self.X, self.Y if x is None else x, y
+        kl = torch.distributions.kl_divergence(qu, pu)
 
-    # def _init_posterior(self):
-    #     """
-    #     Get an initial guess at the variational posterior over the induced 
-    #     outputs.
-    #     """
-    #     # For the mean, take the nearest points in input space and steal their
-    #     # corresponding outputs.  This could be costly if X is very large...
-    #     nearest_points = np.argmin(
-    #         squared_distance(self.Z, self.X).detach().numpy(), axis=1)
-    #     mean = self.X[nearest_points]
+        return marginal_log_likelihood - kl
 
-    #     # For the covariance, we'll start with 1/100 of the prior kernel
-    #     # matrix. (aka 1/10th the Cholesky).
-    #     cov = 0.1 * cholesky(self.kernel.K(self.Z))
-    #     return mean, cov
+    def _init_posterior(self):
+        """
+        Get an initial guess at the variational posterior over the induced 
+        outputs.
+
+        Just build a GP out of a few data and use its posterior.
+        This could be far worse than expected if the likelihood is non-Gaussian,
+        but we don't need this to be great--just good enough to get started.
+        """
+        n_tot = self.X.shape[0]
+        i = np.random.permutation(n_tot)[0: min(n_tot, 100)]
+        x, y = self.X[i].data.numpy(), self.Y[i].data.numpy()
+        # Likelihood needs to be Gaussian for exact inference in GPR
+        likelihood = self.likelihood if isinstance(self.likelihood, Gaussian) \
+            else Gaussian(variance=0.01 * y.var())
+        model = GPR(y, x, self.kernel, mean_function=self.mean_function,
+            likelihood=likelihood)
+        mean, cov = model._predict(self.Z, diag=False)  # FIXME predict_f!!!
+        mean -= self.mean_function(self.Z) 
+        chol_cov = cholesky(cov)
+
+        return Param(mean), Param(chol_cov, transform=LowerCholeskyTransform())
+
+    def _predict(self, input_new: TensorType, diag=True, chol_kuu=None):
+        """
+        SVGP Prediction uses inducing points as sufficient statistics for the 
+        posterior.
+
+        Could implement Marginalization of Gaussians (cf. PRML p. 93), but
+        something specific to (positive-definite) kernel matrices should 
+        perform better.
+
+        :param input_new: inputs to predict on.
+        :param diag: if True, return variance of prediction; False=full cov
+        :param chol_kuu: The Cholesky of the kernel matrix for the inducing 
+            inputs (to enable reuse when computing the training loss)
+        """
+        # TODO move this to predict_f()!
+        if isinstance(input_new, np.ndarray):
+            input_new = TensorType(input_new)
+
+        chol_kuu = cholesky(self.kernel.K(self.Z)) if chol_kuu is None else \
+            chol_kuu
+        kuf = self.kernel.K(self.Z, input_new)
+        alpha = trtrs(kuf, chol_kuu).t()
+        # beta @ beta.t() = inv(kuu) @ S @ inv(kuu), S=post cov of induced outs
+        beta = trtrs(self.induced_output_chol_cov.transform(), chol_kuu)
+        mu_x = self.mean_function(input_new)
+
+        # Remember: induced_output_mean doesn't include mean function.
+        f_mean = alpha @ trtrs(self.induced_output_mean, chol_kuu) + mu_x
+
+        gamma = alpha @ beta
+
+        if diag:
+            f_cov = self.kernel.Kdiag(input_new) - \
+                torch.sum(alpha ** 2, dim=1) - torch.sum(gamma ** 2, dim=1)
+        else:
+            f_cov = self.kernel.K(input_new) - alpha @ alpha.t() - \
+                gamma @ gamma.t()
+        
+        return f_mean, f_cov

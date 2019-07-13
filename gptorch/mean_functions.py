@@ -1,17 +1,16 @@
+# File: mean_functions.py
+# Author: Yinhao Zhu (yzhu10@nd.edu)
 
-from __future__ import absolute_import
-from .util import as_variable
-from .model import Model, Param
 from torch.autograd import Variable
 import torch as th
 from numpy.polynomial.hermite import hermval
 import numpy as np
 
+from .util import as_variable, torch_dtype, TensorType
+from .model import Param  # FIXME circular import on model.Model!
 
-TensorType = th.DoubleTensor
 
-
-class MeanFunction(Model):
+class MeanFunction(th.nn.Module):
     """
     The base mean function class.
     To implement a mean function, write the __call__ method. This takes a
@@ -44,25 +43,25 @@ class MeanFunction(Model):
 
 
 class Zero(MeanFunction):
+    def __init__(self, dy):
+        super().__init__()
+        self._dy = dy
+
     def __call__(self, X):
-        # return Variable(th.zeros(len(X), 1), requires_grad=False)
-        # print(th.zeros(10, 1))
-        return Variable(th.zeros(X.size(0), 1).type(TensorType),
-                        requires_grad=False)
+        return th.zeros(X.shape[0], self._dy, dtype=torch_dtype)
 
 
 class Constant(MeanFunction):
     """
     Just a constant
     """
-    def __init__(self):
+    def __init__(self, dy):
         super(Constant, self).__init__()
+        self._dy = dy
+        self._a = th.nn.Parameter(TensorType([0.0]))
 
     def __call__(self, x):
-        if isinstance(x, Variable):
-            return Variable(th.ones(x.size(0), 1).type(TensorType))
-        else:
-            raise NotImplementedError
+        return self._a.expand(x.shape[0], self._dy)
 
 
 class AskeyPolynomial(MeanFunction):
