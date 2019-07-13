@@ -57,7 +57,8 @@ if __name__ == "__main__":
     x_test = np.linspace(-1, 2, n_test).reshape((-1, 1))
     mu, s = model.predict_y(x_test)
     mu, s = mu.detach().numpy().flatten(), s.detach().numpy().flatten()
-    y_samp = model.predict_y_samples(x_test, n_samples).detach().numpy()
+    y_samp = model.predict_y_samples(x_test, n_samples=n_samples).detach().\
+        numpy()
     unc = 2.0 * np.sqrt(s)
 
     # Show prediction
