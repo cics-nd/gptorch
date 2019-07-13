@@ -11,12 +11,13 @@ import torch
 import numpy as np
 from torch.utils.data import TensorDataset, DataLoader
 
-from ..model import GPModel, Param
-from ..functions import cholesky
+from ..model import Param
+from ..functions import cholesky, trtrs
 from ..mean_functions import Zero
 from ..likelihoods import Gaussian
 from ..util import TensorType, torch_dtype, as_tensor, kmeans_centers
 from ..util import KL_Gaussian
+from .base import GPModel
 
 
 class _InducingPointsGP(GPModel):
@@ -79,6 +80,11 @@ class VFE(_InducingPointsGP):
         Titsias, Michalis K. "Variational Learning of Inducing Variables
         in Sparse Gaussian Processes." AISTATS. Vol. 5. 2009.
     """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        assert isinstance(self.mean_function, Zero), \
+            "Mean functions not implemented for VFE yet."
+
     def compute_loss(self):
         """
         Computes the variational lower bound of the true log marginal likelihood
@@ -99,13 +105,12 @@ class VFE(_InducingPointsGP):
             dtype=torch_dtype)
         L = cholesky(Kuu)
 
-        A = torch.trtrs(Kuf, L, upper=False)[0]
+        A = trtrs(Kuf, L)
         AAT = A @ A.t() / self.likelihood.variance.transform().expand_as(Kuu)
         B = AAT + torch.eye(num_inducing, dtype=torch_dtype)
         LB = cholesky(B)
         # divide variance at the end
-        c = torch.trtrs(A @ err, LB, upper=False)[0] / \
-            self.likelihood.variance.transform()
+        c = trtrs(A @ err, LB) / self.likelihood.variance.transform()
 
         # Evidence lower bound
         elbo = TensorType([-0.5 * dim_output * num_training * np.log(2*np.pi)])
@@ -139,16 +144,15 @@ class VFE(_InducingPointsGP):
         Kuu = self.kernel.K(z) + self.jitter * torch.eye(num_inducing, 
             dtype=torch_dtype)
         Kus = self.kernel.K(z, input_new)
-        L = torch.cholesky(Kuu)
-        A = torch.trtrs(Kuf, L, upper=False)[0]
+        L = cholesky(Kuu)
+        A = trtrs(Kuf, L)
         AAT = A @ A.t() / self.likelihood.variance.transform().expand_as(Kuu)
         B = AAT + torch.eye(num_inducing, dtype=torch_dtype)
-        LB = torch.cholesky(B)
+        LB = cholesky(B)
         # divide variance at the end
-        c = torch.trtrs(A @ err, LB, upper=False)[0] / \
-            self.likelihood.variance.transform()
-        tmp1 = torch.trtrs(Kus, L, upper=False)[0]
-        tmp2 = torch.trtrs(tmp1, LB, upper=False)[0]
+        c = trtrs(A @ err, LB) / self.likelihood.variance.transform()
+        tmp1 = trtrs(Kus, L)
+        tmp2 = trtrs(tmp1, LB)
         mean = tmp2.t() @ c
 
         if diag:

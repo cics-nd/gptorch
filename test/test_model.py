@@ -11,7 +11,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 import numpy as np
 import torch as th
 
-from gptorch.model import Param, Model, GPModel
+from gptorch.model import Param, Model
 
 
 class TestParam(object):
@@ -50,12 +50,5 @@ class TestParam(object):
 class TestModel(object):
     """
     Tests for the Model class
-    """
-    pass
-
-
-class TestGPModel(object):
-    """
-    Tests for the GPModel class
     """
     pass
