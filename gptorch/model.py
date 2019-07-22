@@ -496,6 +496,20 @@ class GPModel(Model):
             return self.likelihood.predict_mean_covariance(mean_f, cov_f)
 
     @input_as_tensor
+    def predict_f_samples(self, input_new, n_samples=1):
+        """
+        Return [n_samp x n_test x d_y] matrix of samples
+        :param input_new:
+        :param n_samples:
+        :return:
+        """
+        mu, sigma = self.predict_f(input_new, diag=False)
+        chol_s = cholesky(sigma)
+        samp = mu + torch.stack([torch.mm(chol_s, Variable(torch.Tensor(r)))
+                              for r in np.random.randn(n_samples, *mu.size())])
+        return samp
+
+    @input_as_tensor
     def predict_y_samples(self, input_new, n_samples=1):
         """
         Return [n_samp x n_test x d_y] matrix of samples
