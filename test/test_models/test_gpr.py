@@ -8,6 +8,9 @@ import torch
 
 from gptorch.models import GPR
 from gptorch.kernels import Rbf
+from gptorch.util import torch_dtype
+
+torch.set_default_dtype(torch_dtype)
 
 
 class TestGPR(object):
@@ -23,10 +26,27 @@ class TestGPR(object):
         # init w/ a mean function:
         GPR(y, x, kern, mean_function=torch.nn.Linear(dx, dy))
 
-    @pytest.mark.xfail()
     def test_compute_loss(self):
-        raise NotImplementedError()
+        n, dx, dy = 5, 3, 2
+        x, y = np.random.randn(n, dx), np.random.randn(n, dy)
+        kern = Rbf(x.shape[1], ARD=True)
 
-    @pytest.mark.xfail()
+        model = GPR(y, x, kern)
+        loss = model.compute_loss()
+        assert isinstance(loss, torch.Tensor)
+        assert loss.ndimension() == 1  # TODO change this...
+
     def test_predict(self):
-        raise NotImplementedError()
+        n, n_test, dx, dy = 5, 7, 3, 2
+        x, y = torch.randn(n, dx), torch.randn(n, dy)
+        kern = Rbf(x.shape[1], ARD=True)
+        model = GPR(y, x, kern)
+
+        x_test = torch.randn(n_test, dx)
+        mu_var, var = model._predict(x_test)
+        assert all([e == a for e, a in zip(mu_var.shape, (n_test, dy))])
+        assert all([e == a for e, a in zip(var.shape, (n_test, dy))])
+        
+        mu_cov, cov = model._predict(x_test, diag=False)
+        assert all([e == a for e, a in zip(mu_cov.shape, (n_test, dy))])
+        assert all([e == a for e, a in zip(cov.shape, (n_test, n_test))])
