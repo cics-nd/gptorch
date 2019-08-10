@@ -30,5 +30,5 @@ setup(name="gptorch",
     author_email="yzhu10@nd.edu, satkinso@nd.edu",
     url="https://github.com/cics-nd/gptorch",
     install_requires=requirements,
-    packages=find_packages(),
-    )
+    packages=find_packages()
+)
