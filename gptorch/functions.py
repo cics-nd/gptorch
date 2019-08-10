@@ -10,9 +10,11 @@ from .util import as_tensor
 import torch
 from torch.nn import functional as F
 import numpy as np
+
+TRIANGULAR_SOLVE = "triangular_solve" in dir(torch)
     
 
-def jit_op(op, x: torch.Tensor, max_tries: int=10, verbose: bool=True) \
+def jit_op(op, x: torch.Tensor, max_tries: int=10, verbose: bool=False) \
         -> torch.Tensor:
     """
     Attempt a potentially-unstable linear algebra operation on a matrix.
@@ -89,4 +91,5 @@ def transform(variable):
 
 
 def trtrs(b: torch.Tensor, a: torch.Tensor, lower=True) -> torch.Tensor:
-    return torch.triangular_solve(b, a, upper=not lower)[0]
+    op = torch.triangular_solve if TRIANGULAR_SOLVE else torch.trtrs
+    return op(b, a, upper=not lower)[0]

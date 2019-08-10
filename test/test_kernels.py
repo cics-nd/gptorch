@@ -40,6 +40,26 @@ class Kern(object):
         self.kdiag_expected = np.load(os.path.join(data_dir, 
             "{}_kdiag.npy".format(self.kern_str)))
 
+    def test_add(self):
+        """
+        Test kernel addition operator
+        """
+        k1 = self.kern + self.kern
+        k2 = kernels.Sum(self.kern, self.kern)
+        k1x = k1.K(self.x1)
+        k2x = k2.K(self.x1)
+        assert all([x1 == x2 for x1, x2 in zip(k1x.flatten(), k2x.flatten())])
+
+    def test_mul(self):
+        """
+        Test kernel product operator
+        """
+        k1 = self.kern * self.kern
+        k2 = kernels.Product(self.kern, self.kern)
+        k1x = k1.K(self.x1)
+        k2x = k2.K(self.x1)
+        assert all([x1 == x2 for x1, x2 in zip(k1x.flatten(), k2x.flatten())])
+
     def test_K(self):
         """
         Inputs are expected to be torch.autograd.Variables of 

@@ -23,7 +23,7 @@ np.random.seed(42)
 
 # Data
 def f(x):
-    return np.sin(2. * np.pi * x) + np.cos(3.5 * np.pi * x) - 3.0 * x
+    return np.sin(2. * np.pi * x) + np.cos(3.5 * np.pi * x) - 3.0 * x + 5.0
 
 
 if __name__ == "__main__":
@@ -33,13 +33,13 @@ if __name__ == "__main__":
     y = f(x) + 0.1 * np.random.randn(n, 1)
 
     # Try different kernels...
-    kern = kernels.Rbf(1)
+    # kern = kernels.Rbf(1)
     # kern = kernels.Matern32(1)
     # kern = kernels.Matern52(1)
     # kern = kernels.Exp(1)
     # kern = kernels.Constant(1)
     # kern = kernels.Linear(1)
-    # kern = kernels.Sum(kernels.Linear(1), kernels.Rbf(1))
+    kern = kernels.Linear(1) + kernels.Rbf(1) + kernels.Constant(1)
 
     # Try different models:
     model = GPR(y, x, kern)
@@ -55,9 +55,10 @@ if __name__ == "__main__":
     n_test = 200
     n_samples = 5
     x_test = np.linspace(-1, 2, n_test).reshape((-1, 1))
-    mu, s = model.predict_y(x_test)
-    mu, s = mu.detach().numpy().flatten(), s.detach().numpy().flatten()
-    y_samp = model.predict_y_samples(x_test, n_samples).detach().numpy()
+    with torch.no_grad():
+        mu, s = model.predict_y(x_test)
+        mu, s = mu.numpy().flatten(), s.numpy().flatten()
+        y_samp = model.predict_y_samples(x_test, n_samples=n_samples).numpy()
     unc = 2.0 * np.sqrt(s)
 
     # Show prediction

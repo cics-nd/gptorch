@@ -14,9 +14,26 @@ import numpy as np
 from time import time
 from warnings import warn
 
-from .functions import SoftplusInv
-from .util import TensorType
+from .functions import cholesky
 from .param import Param
+from .util import torch_dtype
+
+torch.set_default_dtype(torch_dtype)
+
+
+def input_as_tensor(predict_func):
+    """
+    Decorator for prediction funtions to ensure that inputs are torch.Tensor
+    objects before passing into GPModel._predict() methods.
+
+    :param predict_func: The public predict funciton to be wrapped
+    """
+    def predict(obj, input_new, *args, **kwargs):
+        if isinstance(input_new, np.ndarray):
+            input_new = torch.Tensor(input_new)
+        return predict_func(obj, input_new, *args, **kwargs)
+    
+    return predict
 
 
 def _addindent(s_, numSpaces):
@@ -76,7 +93,7 @@ class Model(torch.nn.Module):
                 idx_next = idx_current + np.prod(param.data.size())
                 param_np = np.reshape(param_array[idx_current: idx_next], param.data.numpy().shape)
                 idx_current = idx_next
-                param.data = TensorType(param_np)
+                param.data = torch.Tensor(param_np)
 
     def _loss_and_grad(self, param_array):
         """
@@ -136,14 +153,14 @@ class Model(torch.nn.Module):
     def extract_params(self):
         """
         Returns:
-            (Tuple of TensorTypes)
+            (Tuple of torch.Tensors)
         """
         return tuple([x for x in self.parameters()])
 
     def expand_params(self, *args):
         """
         Args:
-            args (tuple of TensorTypes): (Get from self.extract_params())
+            args (tuple of torch.Tensors): (Get from self.extract_params())
         """
         for arg, (param_name, param) in zip(args, self.named_parameters()):
             if isinstance(arg, Param):
@@ -157,7 +174,7 @@ class Model(torch.nn.Module):
         Loss, given args to be expanded into the model.
 
         Args:
-            args (pointer to a tuple of TensorTypes):
+            args (pointer to a tuple of torch.Tensors):
             (Get from self.extract_params())
         """
         self.expand_params(*args)
@@ -209,15 +226,15 @@ class GPModel(Model):
         assert mean_function is None, "Mean functions not supported"
         self.mean_function = mean_function
 
-        allowed_data_types = (np.ndarray, TensorType)
+        allowed_data_types = (np.ndarray, torch.Tensor)
         assert type(x) in allowed_data_types, \
             "x must be one of {}".format(allowed_data_types)
         if isinstance(x, np.ndarray):
-            x = TensorType(x)
+            x = torch.Tensor(x)
         assert type(y) in allowed_data_types, \
             "y must be one of {}".format(allowed_data_types)
         if isinstance(y, np.ndarray):
-            y = TensorType(y)
+            y = torch.Tensor(y)
         x.requires_grad_(False)
         y.requires_grad_(False)
         self.X, self.Y = x, y
@@ -399,13 +416,14 @@ class GPModel(Model):
                           options=options)
         return result
 
-    def _predict(self, input_new, diag=True):
+    def _predict(self, input_new: torch.Tensor, diag=True):
         # diag: is a flag indicates whether only returns the diagonal of
         # predictive variance at input_new
         # :param input_new: np.ndarray
         raise NotImplementedError
 
-    def predict_f(self, input_new):
+    @input_as_tensor
+    def predict_f(self, input_new, diag=True):
         """
         Computes the mean and variance of the latent function at input_new
         return the diagonal of the cov matrix
@@ -413,12 +431,9 @@ class GPModel(Model):
         Args:
             input_new (numpy.ndarray)
         """
-        return self._predict(input_new, diag=True)
+        return self._predict(input_new, diag=diag)
 
-    def _predict_f_cov_matrix(self, input_new):
-        # return the full predictive cov matrix of latent function at new inputs
-        return self._predict(input_new, diag=False)
-
+    @input_as_tensor
     def predict_y(self, input_new, diag=True):
         """
         Computes the mean and variance of observations at new inputs
@@ -427,12 +442,27 @@ class GPModel(Model):
             input_new (numpy.ndarray)
         """
         mean_f, cov_f = self._predict(input_new, diag=diag)
-        # print(mean_f, var_f)
+        
         if diag:
             return self.likelihood.predict_mean_variance(mean_f, cov_f)
         else:
             return self.likelihood.predict_mean_covariance(mean_f, cov_f)
 
+    @input_as_tensor
+    def predict_f_samples(self, input_new, n_samples=1):
+        """
+        Return [n_samp x n_test x d_y] matrix of samples
+        :param input_new:
+        :param n_samples:
+        :return:
+        """
+        mu, sigma = self.predict_f(input_new, diag=False)
+        chol_s = cholesky(sigma)
+        samp = mu + torch.stack([torch.mm(chol_s, Variable(torch.Tensor(r)))
+                              for r in np.random.randn(n_samples, *mu.size())])
+        return samp
+
+    @input_as_tensor
     def predict_y_samples(self, input_new, n_samples=1):
         """
         Return [n_samp x n_test x d_y] matrix of samples
@@ -440,9 +470,9 @@ class GPModel(Model):
         :param n_samples:
         :return:
         """
-        mu, sigma = self.predict_y(input_new, False)
-        chol_s = torch.cholesky(sigma)
-        samp = mu + torch.stack([torch.mm(chol_s, Variable(TensorType(r)))
+        mu, sigma = self.predict_y(input_new, diag=False)
+        chol_s = cholesky(sigma)
+        samp = mu + torch.stack([torch.mm(chol_s, Variable(torch.Tensor(r)))
                               for r in np.random.randn(n_samples, *mu.size())])
         return samp
 
@@ -471,9 +501,11 @@ class GPModel(Model):
         y_pred_mean, y_pred_var = y_pred_mean.data.numpy(), y_pred_var.data.numpy()
 
         if metric == 'SMSE':
-            return np.power(y_pred_mean - y_test, 2).sum() / y_test.shape[0] / y_test.var()
+            return np.power(y_pred_mean - y_test, 2).sum() / y_test.shape[0] / \
+                y_test.var()
         elif metric == 'RMSE':
-            return np.sqrt(np.power(y_pred_mean - y_test, 2).sum() / y_test.shape[0])
+            return np.sqrt(np.power(y_pred_mean - y_test, 2).sum() / \
+                y_test.shape[0])
         elif metric == 'MSLL':
             # single output dimension
             # predictions for each independent output dimension are the same
@@ -481,12 +513,15 @@ class GPModel(Model):
             y_train = self.Y.data.numpy()
             m0 = y_train.mean()
             S0 = y_train.var()
-            msll = 0.5 * np.mean(np.log(2 * np.pi * y_pred_var) + np.power(y_pred_mean - y_test, 2) / y_pred_var) - \
-                   0.5 * np.mean(np.log(2 * np.pi * S0) + np.power(y_test - m0, 2) / S0)
-            # 0.5 * (y_test.shape[0] * np.log(2 * np.pi * S0) + np.sum(np.power(y_test - m0, 2) / S0))
+            msll = 0.5 * np.mean(np.log(2 * np.pi * y_pred_var) + \
+                np.power(y_pred_mean - y_test, 2) / y_pred_var) - \
+                0.5 * np.mean(np.log(2 * np.pi * S0) + \
+                np.power(y_test - m0, 2) / S0)
+            # 0.5 * (y_test.shape[0] * np.log(2 * np.pi * S0) + \
+            # np.sum(np.power(y_test - m0, 2) / S0))
             return msll
         elif metric == 'NLML':
             return self.compute_loss().data.numpy()
         else:
-            raise Exception('No such metric are supported currently, select one of the following:'
-                            'SMSE, RSME, MSLL, NLML.')
+            raise Exception('No such metric are supported currently, ' + 
+                'select one of the following: SMSE, RSME, MSLL, NLML.')
