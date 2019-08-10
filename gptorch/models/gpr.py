@@ -44,8 +44,8 @@ class GPR(GPModel):
         """
         if likelihood is None:
             likelihood = likelihoods.Gaussian()
-        super().__init__(observations, input, kernel, likelihood,
-                                  mean_function, name)
+        super().__init__(observations, input, kernel, likelihood, 
+            mean_function, name)
 
     def compute_loss(self):
         """

@@ -19,28 +19,41 @@ from ..util import torch_dtype
 torch.set_default_dtype(torch_dtype)
 
 
+def input_as_tensor(predict_func):
+    """
+    Decorator for prediction funtions to ensure that inputs are torch.Tensor
+    objects before passing into GPModel._predict() methods.
+
+    :param predict_func: The public predict funciton to be wrapped
+    """
+    def predict(obj, input_new, *args, **kwargs):
+        if isinstance(input_new, np.ndarray):
+            input_new = torch.Tensor(input_new)
+        return predict_func(obj, input_new, *args, **kwargs)
+    
+    return predict
+
+
 class GPModel(Model):
     """
     The base class for GP models
     """
+
     def __init__(self, y, x, kernel, likelihood, mean_function, 
                  name='gp'):
         """
         For unsupervised case, x is optional ...
-
         Args:
             y (ndarray): Y, N x q
             x (ndarray): X, N x p
             kernel (gptorch.Kernel):
             likelihood (gptorch.Likelihood):
-            mean_function (torch.nn.Module):
+            mean_function (gptorch.MeanFunction):
             name (string): name of this model
         """
         super().__init__()
         self.kernel = kernel
         self.likelihood = likelihood
-        # TODO: reworking mean functions as parameterized classes instead of
-        # design & weight matrices.
         self.mean_function = mean_function if mean_function is not None else \
             Zero(y.shape[1])
 
@@ -56,12 +69,12 @@ class GPModel(Model):
         x.requires_grad_(False)
         y.requires_grad_(False)
         self.X, self.Y = x, y
+        
         self.__class__.__name__ = name
 
     def compute_loss(self):
         """
         Defines computation graph upon every call - PyTorch
-
         This function must be implemented by all subclasses.
         """
         raise NotImplementedError
@@ -78,28 +91,24 @@ class GPModel(Model):
         """
         Optimizes the model by minimizing the loss (from :method:) w.r.t.
         model parameters.
-
         Args:
             method (torch.optim.Optimizer, optional): Optimizer in PyTorch
                 (maybe add scipy optimizer in the future), default is `Adam`.
             max_iter (int): Max iterations, default 2000.
             verbose (bool, optional): Shows more details on optimization
                 process if True.
-
         Todo:
             Add stochastic optimization, such as mini-batch.
-
         Returns:
             (np.array, value):
-
                 losses: losses over optimization steps, (max_iter, )
                 time: time taken approximately
-
         """
         parameters = filter(lambda p: p.requires_grad, self.parameters())
 
         if method == 'SGD':
-            self.optimizer = torch.optim.SGD(parameters, lr=0.05, momentum=0.9)
+            self.optimizer = torch.optim.SGD(parameters, lr=learning_rate, 
+                momentum=0.9)
         elif method == 'Adam':
             self.optimizer = torch.optim.Adam(parameters, lr=learning_rate)
         elif method == 'LBFGS':
@@ -155,7 +164,9 @@ class GPModel(Model):
             if not method == 'LBFGS':
                 for idx in range(max_iter):
                     self.optimizer.zero_grad()
+                    # forward
                     loss = self.compute_loss()
+                    # backward
                     loss.backward()
                     self.optimizer.step()
                     losses[idx] = loss.data.numpy()
@@ -213,7 +224,6 @@ class GPModel(Model):
                         maxiter=1000, disp=True):
         """
         Wrapper of scipy.optimize.minimize
-
         Args:
              method (string): Optimization method
              maxiter (int, optional): Maximum number of iterations to perform,
@@ -231,40 +241,50 @@ class GPModel(Model):
                           options=options)
         return result
 
-    def _predict(self, input_new, diag=True):
+    def _predict(self, input_new: torch.Tensor, diag=True):
         # diag: is a flag indicates whether only returns the diagonal of
         # predictive variance at input_new
         # :param input_new: np.ndarray
-        raise NotImplementedError
+        raise NotImplementedError()
 
-    def predict_f(self, input_new):
+    @input_as_tensor
+    def predict_f(self, input_new, diag=True):
         """
         Computes the mean and variance of the latent function at input_new
         return the diagonal of the cov matrix
-
         Args:
-            input_new (numpy.ndarray)
+            input_new (numpy.ndarray or torch.Tensor)
         """
-        return self._predict(input_new, diag=True)
+        return self._predict(input_new, diag=diag)
 
-    def _predict_f_cov_matrix(self, input_new):
-        # return the full predictive cov matrix of latent function at new inputs
-        return self._predict(input_new, diag=False)
-
+    @input_as_tensor
     def predict_y(self, input_new, diag=True):
         """
         Computes the mean and variance of observations at new inputs
-
         Args:
             input_new (numpy.ndarray)
         """
         mean_f, cov_f = self._predict(input_new, diag=diag)
-        # print(mean_f, var_f)
+        
         if diag:
             return self.likelihood.predict_mean_variance(mean_f, cov_f)
         else:
             return self.likelihood.predict_mean_covariance(mean_f, cov_f)
 
+    @input_as_tensor
+    def predict_f_samples(self, input_new, n_samples=1):
+        """
+        Return [n_samp x n_test x d_y] matrix of samples
+        :param input_new:
+        :param n_samples:
+        :return:
+        """
+        mu, sigma = self.predict_f(input_new, diag=False)
+        chol_s = cholesky(sigma)
+        samp = mu + chol_s[None, :, :] @ torch.randn(n_samples, *mu.shape)
+        return samp
+
+    @input_as_tensor
     def predict_y_samples(self, input_new, n_samples=1):
         """
         Return [n_samp x n_test x d_y] matrix of samples
@@ -272,10 +292,9 @@ class GPModel(Model):
         :param n_samples:
         :return:
         """
-        mu, sigma = self.predict_y(input_new, False)
+        mu, sigma = self.predict_y(input_new, diag=False)
         chol_s = cholesky(sigma)
-        # Batch matmul uses leading indices as batch indices
-        samp = mu + chol_s @ torch.randn(n_samples, *mu.shape)
+        samp = mu + chol_s[None, :, :] @ torch.randn(n_samples, *mu.shape)
         return samp
 
     # TODO: need more thought on this interface
@@ -283,18 +302,15 @@ class GPModel(Model):
     def evaluate(self, x_test, y_test, metric='NLML'):
         """
         Evaluate the model using various metrics, including:
-
         - SMSE: Standardized Mean Squared Error
         - RMSE: Rooted Mean Squared Error
         - MSLL: Mean Standardized Log Loss
         - NLML: Negative Log Marginal Likelihood
-
         Args:
             x_test (numpy.ndarray): test input
             y_test (numpy.ndarray): test observations
             metric (string, optional): name for the metric, chosen from the list
                 above.
-
         Returns:
             value of the metric
         """
