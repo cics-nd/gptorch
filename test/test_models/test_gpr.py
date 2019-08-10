@@ -29,4 +29,4 @@ class TestGPR(object):
 
     @pytest.mark.xfail()
     def test_predict(self):
-        raise NotImplementedError
+        raise NotImplementedError()

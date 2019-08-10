@@ -41,6 +41,7 @@ class _InducingPointsGP(GPModel):
         points (up to 100) will be draw randomly from input as the inducing 
         points.
         """
+        
         super().__init__(y, x, kernel, likelihood, mean_function)
 
         if inducing_points is None:
@@ -123,13 +124,12 @@ class VFE(_InducingPointsGP):
 
         return - elbo
 
-    def _predict(self, input_new, diag=True):
-        # following GPflow implementation
-        # integrating the inducing variables out
+    def _predict(self, input_new: TensorType, diag=True):
+        """
+        Compute posterior p(f*|y), integrating out induced outputs' posterior.
 
-        if isinstance(input_new, np.ndarray):
-            # set input_new to be volatile for inference mode
-            input_new = TensorType(input_new)
+        :return: (mean, var/cov)
+        """
 
         z = self.Z
         z.requires_grad_(False)

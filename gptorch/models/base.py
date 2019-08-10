@@ -101,8 +101,7 @@ class GPModel(Model):
         if method == 'SGD':
             self.optimizer = torch.optim.SGD(parameters, lr=0.05, momentum=0.9)
         elif method == 'Adam':
-            self.optimizer = torch.optim.Adam(parameters, lr=0.001,
-                                           betas=(0.9, 0.999), eps=1e-06, weight_decay=0.0)
+            self.optimizer = torch.optim.Adam(parameters, lr=learning_rate)
         elif method == 'LBFGS':
             if learning_rate is None:
                 learning_rate = 1.0
@@ -156,9 +155,7 @@ class GPModel(Model):
             if not method == 'LBFGS':
                 for idx in range(max_iter):
                     self.optimizer.zero_grad()
-                    # forward
                     loss = self.compute_loss()
-                    # backward
                     loss.backward()
                     self.optimizer.step()
                     losses[idx] = loss.data.numpy()

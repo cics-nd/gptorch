@@ -77,7 +77,7 @@ class GPR(GPModel):
         (self.likelihood.variance.transform()).expand(
             num_input, num_input).diag().diag()
 
-    def _predict(self, input_new, diag, full_cov_size_limit=10000):
+    def _predict(self, input_new: TensorType, diag=True):
         """
         This method computes
 
@@ -86,13 +86,8 @@ class GPR(GPModel):
 
         where F* are points on the GP at input_new, Y are observations at the
         input X of the training data.
-        :param input_new: assume to be numpy array, but should be in two dimensional
+        :param input_new: test inputs; should be two-dimensional
         """
-
-        if isinstance(input_new, np.ndarray):
-            input_new = TensorType(input_new)
-            input_new.requires_grad_(False)
-
         k_ys = self.kernel.K(self.X, input_new)
 
         L = cholesky(self._compute_kyy())
