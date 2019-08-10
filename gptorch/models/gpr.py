@@ -7,16 +7,16 @@
 Class for Vanilla GP regression.
 """
 
-from __future__ import absolute_import
 import torch
 import numpy as np
 from torch.autograd import Variable
 
 from .. import kernels
-from ..model import GPModel, Param
+from ..model import Param
 from .. import likelihoods
 from ..functions import cholesky, inverse, lt_log_determinant, trtrs
 from ..util import TensorType
+from .base import GPModel
 
 
 class GPR(GPModel):
@@ -44,12 +44,12 @@ class GPR(GPModel):
         """
         if likelihood is None:
             likelihood = likelihoods.Gaussian()
-        super().__init__(observations, input, kernel, likelihood,
-                                  mean_function, name)
+        super().__init__(observations, input, kernel, likelihood, 
+            mean_function, name)
 
     def compute_loss(self):
         """
-        Loss is equal to the negative of the log likelihood
+        Loss is equal to the negative of the prior log likelihood
 
         Adapted from Rasmussen & Williams, GPML (2006), p. 19, Algorithm 2.1.
         """
@@ -58,7 +58,7 @@ class GPR(GPModel):
         dim_output = self.Y.size(1)
 
         L = cholesky(self._compute_kyy())
-        alpha = trtrs(self.Y, L)
+        alpha = trtrs(self.Y - self.mean_function(self.X), L)
         const = TensorType([-0.5 * dim_output * num_input * np.log(2 * np.pi)])
         loss = 0.5 * alpha.pow(2).sum() + dim_output * lt_log_determinant(L) \
             - const
@@ -92,11 +92,8 @@ class GPR(GPModel):
 
         L = cholesky(self._compute_kyy())
         A = trtrs(k_ys, L)
-        V = trtrs(self.Y, L)
-        mean_f = A.t() @ V
-
-        if self.mean_function is not None:
-            mean_f += self.mean_function(input_new)
+        V = trtrs(self.Y - self.mean_function(self.X), L)
+        mean_f = A.t() @ V + self.mean_function(input_new)
 
         var_f_1 = self.kernel.Kdiag(input_new) if diag else \
             self.kernel.K(input_new)  # Kss
