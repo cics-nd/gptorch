@@ -169,6 +169,11 @@ class TestRbf(ARD, TestCase):
         super().setUp(kernels.Rbf)
 
 
+class TestPeriodic(ARD, TestCase):
+    def setUp(self):
+        super().setUp(kernels.Periodic)
+
+
 @pytest.mark.xfail(reason="Linear is different because we use .variance " + 
     "instead of .length_scales (TODO)")
 class TestLinear(ARD, TestCase):
