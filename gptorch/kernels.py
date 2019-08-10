@@ -157,7 +157,7 @@ class Stationary(Kernel):
 
     def dist(self, X: torch.Tensor, X2: torch.Tensor) -> torch.Tensor:
         """
-        Matrix of Euclidean distances between points
+        Matrix of (scaled) Euclidean distances between points.
 
         Args:
             X: Matrix of vectors
@@ -215,6 +215,15 @@ class Rbf(Stationary):
 
 
 SquaredExponential = Rbf
+
+
+class Periodic(Stationary):
+    """
+    Periodic kernel,
+    k(r) = A cos(B * r)
+    """
+    def K(self, X, X2=None):
+        return self.variance.transform() * torch.cos(self.dist(X, X2))
 
 
 class Linear(Kernel):
