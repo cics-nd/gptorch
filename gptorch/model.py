@@ -7,8 +7,6 @@ Basic model and parameter classes for Gaussian Processes, inheriting from
 :class:`torch.nn.Module` and :class:`torch.nn.Parameter` respectively.
 """
 
-from __future__ import absolute_import
-
 from torch.autograd import Variable, gradcheck
 import torch
 from scipy.optimize import minimize
@@ -16,7 +14,8 @@ import numpy as np
 from time import time
 from warnings import warn
 
-from .functions import SoftplusInv, cholesky
+from .functions import cholesky
+from .param import Param
 from .util import torch_dtype
 
 torch.set_default_dtype(torch_dtype)
@@ -199,52 +198,6 @@ class Model(torch.nn.Module):
             warn("Verbose not yet figured out")
         return gradcheck(self.loss, self.extract_params(), eps=eps, atol=atol,
                          rtol=rtol)
-
-
-class Param(torch.nn.Parameter):
-    """
-    Customized Parameter class extending the PyTorch Parameter class.
-    Its main purpose is to include the following additional functionality:
-    1) The .transform() member function, in order to impose constraints on the 
-        parameter.
-    2) the .prior member, for incorporation into joint log-probabilities (e.g. 
-        for training)
-    """
-    def __new__(cls, data=None, requires_grad=True, requires_transform=False,
-                prior=None):
-        if requires_transform:
-            data = Param._transform_log(data, forward=False)
-        return super(Param, cls).__new__(cls, data, 
-            requires_grad=requires_grad)
-
-    def __init__(self, data, requires_grad=True, requires_transform=False):
-        super(Param, self).__init__()
-        self.requires_transform = requires_transform
-        self.prior = None
-
-    def transform(self):
-        # Avoid in-place operation for Tensor, using clone method  ???
-        if self.requires_transform:
-            return self._transform_log(self.clone(), forward=True)
-        else:
-            return self
-
-    def __repr__(self):
-        return 'Parameter containing:' + self.data.__repr__()
-
-    @staticmethod
-    def _transform_log(x, forward):
-        if forward:
-            return torch.exp(x)
-        else:
-            return torch.log(x)
-
-    @staticmethod
-    def _transform_softplus(x, forward):
-        if forward:
-            return torch.nn.functional.softplus(x, threshold=35)
-        else:
-            return SoftplusInv(x)
 
 
 class GPModel(Model):
@@ -494,6 +447,20 @@ class GPModel(Model):
             return self.likelihood.predict_mean_variance(mean_f, cov_f)
         else:
             return self.likelihood.predict_mean_covariance(mean_f, cov_f)
+
+    @input_as_tensor
+    def predict_f_samples(self, input_new, n_samples=1):
+        """
+        Return [n_samp x n_test x d_y] matrix of samples
+        :param input_new:
+        :param n_samples:
+        :return:
+        """
+        mu, sigma = self.predict_f(input_new, diag=False)
+        chol_s = cholesky(sigma)
+        samp = mu + torch.stack([torch.mm(chol_s, Variable(torch.Tensor(r)))
+                              for r in np.random.randn(n_samples, *mu.size())])
+        return samp
 
     @input_as_tensor
     def predict_y_samples(self, input_new, n_samples=1):
