@@ -3,24 +3,23 @@
 #
 # class for likelihoods: p(y | f)
 
-from __future__ import absolute_import
-from . import densities
-from .model import Model, Param
-
 from torch.nn import Parameter
-import torch as th
+import torch
+from torch import distributions
 
+from .model import Model, Param
 from .settings import DefaultPositiveTransform
-from .util import TensorType
+from .util import torch_dtype
 
-# from functions import SoftplusInv
-# from torch.nn import functional as F
-
-float_type = TensorType
+torch.set_default_dtype(torch_dtype)
 
 
 class Likelihood(Model):
-
+    """
+    Base class for likelihoods, i.e. objects handling the conditional 
+    probability relating observed targets y and a (GP) latent function f,
+    p(y|f)
+    """
     def __init__(self):
         super(Likelihood, self).__init__()
 
@@ -43,19 +42,14 @@ class Likelihood(Model):
     def forward(self):
         return None
 
-    # def __repr__(self):
-    #     tmpstr = self.__class__.__name__ + ' (\n'
-    #     for name, param in self._parameters.items():
-    #         tmpstr = tmpstr + name + str(param.data) + '\n'
-    #     tmpstr = tmpstr + ')'
-    #     return tmpstr
-
 
 class Gaussian(Likelihood):
-    # Possibly replace these with torch.distributions?
+    """
+    (Spherical) Gaussian likelihood p(y|f)
+    """
     def __init__(self, variance=1.0):
         super(Gaussian, self).__init__()
-        self.variance = Param(th.Tensor([variance]).type(float_type),
+        self.variance = Param(torch.Tensor([variance]),
                               transform=DefaultPositiveTransform())
 
     def logp(self, F, Y):
@@ -68,7 +62,8 @@ class Gaussian(Likelihood):
         :param Y: Targets where we want to compute the log-pdf
         :type Y: torch.autograd.Variable
         """
-        return densities.gaussian(F, Y, self.variance.transform())
+        return distributions.Normal(F, torch.sqrt(self.variance.transform())). \
+            log_prob(Y)
 
     def predict_mean_variance(self, mean_f, var_f):
         """
