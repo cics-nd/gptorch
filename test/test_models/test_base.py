@@ -24,7 +24,7 @@ class TestGPModel(object):
         n, dx, dy = 5, 3, 2
         x, y = np.random.randn(n, dx), np.random.randn(n, dy)
         kern = Rbf(dx, ARD=True)
-        gp = GPR(y, x, kern)
+        gp = GPR(x, y, kern)
 
         n_test = 5
         x_test = np.random.randn(n_test, dx)
@@ -44,7 +44,7 @@ class TestGPModel(object):
         n, dx, dy = 5, 3, 2
         x, y = np.random.randn(n, dx), np.random.randn(n, dy)
         kern = Rbf(dx, ARD=True)
-        gp = GPR(y, x, kern)
+        gp = GPR(x, y, kern)
 
         n_test = 5
         x_test = np.random.randn(n_test, dx)

@@ -42,8 +42,8 @@ if __name__ == "__main__":
     kern = kernels.Linear(1) + kernels.Rbf(1) + kernels.Constant(1)
 
     # Try different models:
-    model = GPR(y, x, kern)
-    # model = VFE(y, x, kern)
+    model = GPR(x, y, kern)
+    # model = VFE(x, y, kern)
     model.likelihood.variance.data = TensorType([1.0e-6])
 
     # Train

@@ -39,7 +39,7 @@ class GPModel(Model):
     The base class for GP models
     """
 
-    def __init__(self, y, x, kernel, likelihood, mean_function, 
+    def __init__(self, x, y, kernel, likelihood, mean_function, 
                  name='gp'):
         """
         For unsupervised case, x is optional ...

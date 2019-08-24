@@ -24,7 +24,7 @@ class _InducingPointsGP(GPModel):
     """
     Parent class for GPs with inducing points
     """
-    def __init__(self, y, x, kernel, num_inducing_points=None, 
+    def __init__(self, x, y, kernel, num_inducing_points=None, 
             inducing_points=None, mean_function=None, likelihood=Gaussian()):
         """
         Assume Gaussian likelihood
@@ -42,7 +42,7 @@ class _InducingPointsGP(GPModel):
         points.
         """
         
-        super().__init__(y, x, kernel, likelihood, mean_function)
+        super().__init__(x, y, kernel, likelihood, mean_function)
 
         if inducing_points is None:
             if num_inducing_points is None:
@@ -124,7 +124,7 @@ class VFE(_InducingPointsGP):
 
         return - elbo
 
-    def _predict(self, input_new: TensorType, diag=True):
+    def _predict(self, x_new: TensorType, diag=True):
         """
         Compute posterior p(f*|y), integrating out induced outputs' posterior.
 
@@ -135,7 +135,6 @@ class VFE(_InducingPointsGP):
         z.requires_grad_(False)
 
         num_inducing = z.size(0)
-        dim_output = self.Y.size(1)
 
         # err = self.Y - self.mean_function(self.X)
         err = self.Y
@@ -143,7 +142,7 @@ class VFE(_InducingPointsGP):
         # add jitter
         Kuu = self.kernel.K(z) + self.jitter * torch.eye(num_inducing, 
             dtype=torch_dtype)
-        Kus = self.kernel.K(z, input_new)
+        Kus = self.kernel.K(z, x_new)
         L = cholesky(Kuu)
         A = trtrs(Kuf, L)
         AAT = A @ A.t() / self.likelihood.variance.transform().expand_as(Kuu)
@@ -156,12 +155,11 @@ class VFE(_InducingPointsGP):
         mean = tmp2.t() @ c
 
         if diag:
-            var = self.kernel.Kdiag(input_new) - tmp1.pow(2).sum(0).squeeze() \
+            var = self.kernel.Kdiag(x_new) - tmp1.pow(2).sum(0).squeeze() \
                   + tmp2.pow(2).sum(0).squeeze()
-            # add kronecker product later for multi-output case
         else:
-            var = self.kernel.K(input_new) + tmp2.t() @ tmp2 - tmp1.t() @ tmp1
-        # return mean + self.mean_function(input_new), var
+            var = self.kernel.K(x_new) + tmp2.t() @ tmp2 - tmp1.t() @ tmp1
+
         return mean, var
 
 

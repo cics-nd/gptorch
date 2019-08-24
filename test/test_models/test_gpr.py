@@ -20,18 +20,18 @@ class TestGPR(object):
         kern = Rbf(x.shape[1], ARD=True)
 
         # init w/ numpy
-        GPR(y, x, kern)
+        GPR(x, y, kern)
         # init w/ PyTorch tensors:
         GPR(torch.Tensor(y), torch.Tensor(x), kern)
         # init w/ a mean function:
-        GPR(y, x, kern, mean_function=torch.nn.Linear(dx, dy))
+        GPR(x, y, kern, mean_function=torch.nn.Linear(dx, dy))
 
     def test_compute_loss(self):
         n, dx, dy = 5, 3, 2
         x, y = np.random.randn(n, dx), np.random.randn(n, dy)
         kern = Rbf(x.shape[1], ARD=True)
 
-        model = GPR(y, x, kern)
+        model = GPR(x, y, kern)
         loss = model.compute_loss()
         assert isinstance(loss, torch.Tensor)
         assert loss.ndimension() == 1  # TODO change this...
@@ -40,7 +40,7 @@ class TestGPR(object):
         n, n_test, dx, dy = 5, 7, 3, 2
         x, y = torch.randn(n, dx), torch.randn(n, dy)
         kern = Rbf(x.shape[1], ARD=True)
-        model = GPR(y, x, kern)
+        model = GPR(x, y, kern)
 
         x_test = torch.randn(n_test, dx)
         mu_var, var = model._predict(x_test)
