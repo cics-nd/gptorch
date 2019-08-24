@@ -18,6 +18,14 @@ class TestParam(object):
         Param(x, transform=transforms.ExpTransform())
         Param(x, transform=transforms.LowerCholeskyTransform())
 
+    def test_access(self):
+        """
+        Test accessing the value.
+        """
+        p = Param(torch.DoubleTensor([1.0]))
+        assert isinstance(p.data, torch.DoubleTensor)
+        assert isinstance(p.data.numpy(), np.ndarray)
+
     def test_transform_inverse(self):
         x = torch.rand(3, 3)
         t = transforms.ExpTransform()

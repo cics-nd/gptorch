@@ -84,7 +84,7 @@ class GPLVM(GPModel):
             assert isinstance(kernel, ekernels.Rbf), \
                 "Supports only ekernel.Rbf currently."
 
-        super(GPLVM, self).__init__(observations, Xmean, kernel,
+        super(GPLVM, self).__init__(Xmean, observations, kernel,
                                     Gaussian(), Zero(), name='GPLVM')
         del self.X
 

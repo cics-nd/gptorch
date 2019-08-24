@@ -12,20 +12,21 @@ import numpy as np
 from torch.utils.data import TensorDataset, DataLoader
 from torch.distributions.transforms import LowerCholeskyTransform
 
-from ..model import GPModel, Param
+from ..model import Param
 from ..functions import cholesky, trtrs
 from ..mean_functions import Zero
 from ..likelihoods import Gaussian
 from ..util import TensorType, torch_dtype, as_tensor, kmeans_centers
 from ..util import KL_Gaussian
 from .gpr import GPR
+from .base import GPModel
 
 
 class _InducingPointsGP(GPModel):
     """
     Parent class for GPs with inducing points
     """
-    def __init__(self, y, x, kernel, num_inducing_points=None, 
+    def __init__(self, x, y, kernel, num_inducing_points=None, 
             inducing_points=None, mean_function=None, likelihood=Gaussian()):
         """
         Assume Gaussian likelihood
@@ -42,7 +43,8 @@ class _InducingPointsGP(GPModel):
         points (up to 100) will be draw randomly from input as the inducing 
         points.
         """
-        super().__init__(y, x, kernel, likelihood, mean_function)
+        
+        super().__init__(x, y, kernel, likelihood, mean_function)
 
         if inducing_points is None:
             if num_inducing_points is None:
@@ -88,6 +90,11 @@ class VFE(_InducingPointsGP):
         Titsias, Michalis K. "Variational Learning of Inducing Variables
         in Sparse Gaussian Processes." AISTATS. Vol. 5. 2009.
     """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        assert isinstance(self.mean_function, Zero), \
+            "Mean functions not implemented for VFE yet."
+
     def compute_loss(self):
         """
         Computes the variational lower bound of the true log marginal likelihood
@@ -108,13 +115,12 @@ class VFE(_InducingPointsGP):
             dtype=torch_dtype)
         L = cholesky(Kuu)
 
-        A = torch.trtrs(Kuf, L, upper=False)[0]
+        A = trtrs(Kuf, L)
         AAT = A @ A.t() / self.likelihood.variance.transform().expand_as(Kuu)
         B = AAT + torch.eye(num_inducing, dtype=torch_dtype)
         LB = cholesky(B)
         # divide variance at the end
-        c = torch.trtrs(A @ err, LB, upper=False)[0] / \
-            self.likelihood.variance.transform()
+        c = trtrs(A @ err, LB) / self.likelihood.variance.transform()
 
         # Evidence lower bound
         elbo = TensorType([-0.5 * dim_output * num_training * np.log(2*np.pi)])
@@ -127,19 +133,17 @@ class VFE(_InducingPointsGP):
 
         return - elbo
 
-    def _predict(self, input_new, diag=True):
-        # following GPflow implementation
-        # integrating the inducing variables out
+    def _predict(self, x_new: TensorType, diag=True):
+        """
+        Compute posterior p(f*|y), integrating out induced outputs' posterior.
 
-        if isinstance(input_new, np.ndarray):
-            # set input_new to be volatile for inference mode
-            input_new = TensorType(input_new)
+        :return: (mean, var/cov)
+        """
 
         z = self.Z
         z.requires_grad_(False)
 
         num_inducing = z.size(0)
-        dim_output = self.Y.size(1)
 
         # err = self.Y - self.mean_function(self.X)
         err = self.Y
@@ -147,26 +151,24 @@ class VFE(_InducingPointsGP):
         # add jitter
         Kuu = self.kernel.K(z) + self.jitter * torch.eye(num_inducing, 
             dtype=torch_dtype)
-        Kus = self.kernel.K(z, input_new)
-        L = torch.cholesky(Kuu)
-        A = torch.trtrs(Kuf, L, upper=False)[0]
+        Kus = self.kernel.K(z, x_new)
+        L = cholesky(Kuu)
+        A = trtrs(Kuf, L)
         AAT = A @ A.t() / self.likelihood.variance.transform().expand_as(Kuu)
         B = AAT + torch.eye(num_inducing, dtype=torch_dtype)
-        LB = torch.cholesky(B)
+        LB = cholesky(B)
         # divide variance at the end
-        c = torch.trtrs(A @ err, LB, upper=False)[0] / \
-            self.likelihood.variance.transform()
-        tmp1 = torch.trtrs(Kus, L, upper=False)[0]
-        tmp2 = torch.trtrs(tmp1, LB, upper=False)[0]
+        c = trtrs(A @ err, LB) / self.likelihood.variance.transform()
+        tmp1 = trtrs(Kus, L)
+        tmp2 = trtrs(tmp1, LB)
         mean = tmp2.t() @ c
 
         if diag:
-            var = self.kernel.Kdiag(input_new) - tmp1.pow(2).sum(0).squeeze() \
+            var = self.kernel.Kdiag(x_new) - tmp1.pow(2).sum(0).squeeze() \
                   + tmp2.pow(2).sum(0).squeeze()
-            # add kronecker product later for multi-output case
         else:
-            var = self.kernel.K(input_new) + tmp2.t() @ tmp2 - tmp1.t() @ tmp1
-        # return mean + self.mean_function(input_new), var
+            var = self.kernel.K(x_new) + tmp2.t() @ tmp2 - tmp1.t() @ tmp1
+
         return mean, var
 
 

@@ -42,8 +42,8 @@ if __name__ == "__main__":
     kern = kernels.Linear(1) + kernels.Rbf(1) + kernels.Constant(1)
 
     # Try different models:
-    model = GPR(y, x, kern)
-    # model = VFE(y, x, kern)
+    model = GPR(x, y, kern)
+    # model = VFE(x, y, kern)
     model.likelihood.variance.data = TensorType([1.0e-6])
 
     # Train
@@ -55,9 +55,10 @@ if __name__ == "__main__":
     n_test = 200
     n_samples = 5
     x_test = np.linspace(-1, 2, n_test).reshape((-1, 1))
-    mu, s = model.predict_y(x_test)
-    mu, s = mu.detach().numpy().flatten(), s.detach().numpy().flatten()
-    y_samp = model.predict_y_samples(x_test, n_samples).detach().numpy()
+    with torch.no_grad():
+        mu, s = model.predict_y(x_test)
+        mu, s = mu.numpy().flatten(), s.numpy().flatten()
+        y_samp = model.predict_y_samples(x_test, n_samples=n_samples).numpy()
     unc = 2.0 * np.sqrt(s)
 
     # Show prediction

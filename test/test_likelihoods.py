@@ -55,7 +55,7 @@ class TestGaussian(object):
         assert isinstance(logp, Variable)
 
         # Value
-        assert logp.data.numpy() == expected_logp
+        assert logp.data.numpy() == pytest.approx(expected_logp)
 
     def test_predict_mean_variance(self):
         """

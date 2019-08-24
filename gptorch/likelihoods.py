@@ -3,15 +3,17 @@
 #
 # class for likelihoods: p(y | f)
 
-from __future__ import absolute_import
-from . import densities
-from .model import Model, Param
+import abc
 
 from torch.nn import Parameter
-import torch as th
+import torch
+from torch import distributions
 
+from .model import Model, Param
 from .settings import DefaultPositiveTransform
-from .util import TensorType
+from .util import torch_dtype
+
+torch.set_default_dtype(torch_dtype)
 
 
 class Likelihood(Model):
@@ -26,7 +28,7 @@ class Likelihood(Model):
     We typically have two uses for these:
     1) Do the marginalization in p(y|x) = \int p(y|f) p(f|x) df 
         (e.g. predictions)
-    2) Do the marginalization in logp(y) = \int logp(y|f) p(f) df
+    2) Do the marginalization in logp(y) >= \int logp(y|f) p(f) df
         (e.g. variational inference)
     """
     def __init__(self):
@@ -62,10 +64,12 @@ class Likelihood(Model):
 
 
 class Gaussian(Likelihood):
-    # Possibly replace these with torch.distributions?
+    """
+    (Spherical) Gaussian likelihood p(y|f)
+    """
     def __init__(self, variance=1.0):
         super(Gaussian, self).__init__()
-        self.variance = Param(th.Tensor([variance]).type(float_type),
+        self.variance = Param(torch.Tensor([variance]),
                               transform=DefaultPositiveTransform())
 
     def logp(self, F, Y):
@@ -78,7 +82,8 @@ class Gaussian(Likelihood):
         :param Y: Targets where we want to compute the log-pdf
         :type Y: torch.autograd.Variable
         """
-        return densities.gaussian(F, Y, self.variance.transform())
+        return distributions.Normal(F, torch.sqrt(self.variance.transform())). \
+            log_prob(Y)
 
     def predict_mean_variance(self, mean_f, var_f):
         """

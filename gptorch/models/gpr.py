@@ -7,23 +7,23 @@
 Class for Vanilla GP regression.
 """
 
-from __future__ import absolute_import
 import torch
 import numpy as np
 from torch.autograd import Variable
 
 from .. import kernels
-from ..model import GPModel, Param
+from ..model import Param
 from .. import likelihoods
-from ..functions import cholesky, inverse, lt_log_determinant
+from ..functions import cholesky, inverse, lt_log_determinant, trtrs
 from ..util import TensorType
+from .base import GPModel
 
 
 class GPR(GPModel):
     """
     Gaussian Process Regression
     """
-    def __init__(self, observations, input, kernel, mean_function=None,
+    def __init__(self, x, y, kernel, mean_function=None,
                  likelihood=None, name='gpr'):
         """
         Default likelihood is Gaussain, mean function is zero.
@@ -44,12 +44,11 @@ class GPR(GPModel):
         """
         if likelihood is None:
             likelihood = likelihoods.Gaussian()
-        super().__init__(observations, input, kernel, likelihood,
-                                  mean_function, name)
+        super().__init__(x, y, kernel, likelihood, mean_function, name)
 
     def compute_loss(self):
         """
-        Loss is equal to the negative of the log likelihood
+        Loss is equal to the negative of the prior log likelihood
 
         Adapted from Rasmussen & Williams, GPML (2006), p. 19, Algorithm 2.1.
         """
@@ -58,7 +57,7 @@ class GPR(GPModel):
         dim_output = self.Y.size(1)
 
         L = cholesky(self._compute_kyy())
-        alpha = torch.triangular_solve(self.Y, L, upper=False)[0]
+        alpha = trtrs(self.Y - self.mean_function(self.X), L)
         const = TensorType([-0.5 * dim_output * num_input * np.log(2 * np.pi)])
         loss = 0.5 * alpha.pow(2).sum() + dim_output * lt_log_determinant(L) \
             - const
@@ -77,34 +76,26 @@ class GPR(GPModel):
         (self.likelihood.variance.transform()).expand(
             num_input, num_input).diag().diag()
 
-    def _predict(self, input_new, diag, full_cov_size_limit=10000):
+    def _predict(self, x_new: TensorType, diag=True):
         """
         This method computes
 
         .. math::
             p(F^* | Y )
 
-        where F* are points on the GP at input_new, Y are observations at the
+        where F* are points on the GP at x_new, Y are observations at the
         input X of the training data.
-        :param input_new: assume to be numpy array, but should be in two dimensional
+        :param x_new: test inputs; should be two-dimensional
         """
-
-        if isinstance(input_new, np.ndarray):
-            input_new = TensorType(input_new)
-            input_new.requires_grad_(False)
-
-        k_ys = self.kernel.K(self.X, input_new)
+        k_ys = self.kernel.K(self.X, x_new)
 
         L = cholesky(self._compute_kyy())
-        A = torch.triangular_solve(k_ys, L, upper=False)[0]
-        V = torch.triangular_solve(self.Y, L, upper=False)[0]
-        mean_f = A.t() @ V
+        A = trtrs(k_ys, L)
+        V = trtrs(self.Y - self.mean_function(self.X), L)
+        mean_f = A.t() @ V + self.mean_function(x_new)
 
-        if self.mean_function is not None:
-            mean_f += self.mean_function(input_new)
-
-        var_f_1 = self.kernel.Kdiag(input_new) if diag else \
-            self.kernel.K(input_new)  # Kss
+        var_f_1 = self.kernel.Kdiag(x_new) if diag else \
+            self.kernel.K(x_new)  # Kss
 
         if diag:
             var_f_2 = (A * A).sum(0)
