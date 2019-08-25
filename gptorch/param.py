@@ -19,8 +19,8 @@ class Param(torch.nn.Parameter):
     2) the .prior member, for incorporation into joint log-probabilities (e.g. 
         for training)
     """
-    def __new__(cls, data=None, requires_grad=True, transform=None,
-                prior=None):
+
+    def __new__(cls, data=None, requires_grad=True, transform=None, prior=None):
         transform = ComposeTransform([]) if transform is None else transform
         data = transform.inv(data)
         return super().__new__(cls, data, requires_grad=requires_grad)
@@ -35,4 +35,4 @@ class Param(torch.nn.Parameter):
         return self._transform(self)
 
     def __repr__(self):
-        return 'Parameter containing:' + self.data.__repr__()
+        return "Parameter containing:" + self.data.__repr__()

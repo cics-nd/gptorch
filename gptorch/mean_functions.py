@@ -18,7 +18,8 @@ class Constant(torch.nn.Module):
     """
     Constant mean function
     """
-    def __init__(self, dy: int, val: torch.Tensor=None):
+
+    def __init__(self, dy: int, val: torch.Tensor = None):
         super().__init__()
         if val is not None:
             if not val.shape[0] == dy:
@@ -38,6 +39,7 @@ class Zero(Constant):
     """
     Zero mean function (default for GPs).
     """
+
     def __init__(self, dy: int):
         super().__init__(dy)
         self.val.requires_grad_(False)

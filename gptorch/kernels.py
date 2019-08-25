@@ -1,5 +1,5 @@
 # File: kernels.py
-# File created: Apr 13, 2017 
+# File created: Apr 13, 2017
 # Author: Yinhao Zhu (yzhu10@nd.edu)
 
 """
@@ -31,6 +31,7 @@ class Kernel(Model):
     """
     Base class for kernels
     """
+
     def __init__(self, input_dim):
         self.input_dim = int(input_dim)
         # self.name_kernel = name
@@ -60,8 +61,7 @@ class Kernel(Model):
         correct_shape = (self.input_dim,)
 
         if x.shape != correct_shape:
-            raise ValueError(
-                "shape of possibly-ARD param does not match input_dim")
+            raise ValueError("shape of possibly-ARD param does not match input_dim")
 
         return x, ARD
 
@@ -74,8 +74,9 @@ class Static(Kernel):
 
     def __init__(self, input_dim, variance=1.0):
         super().__init__(input_dim)
-        self.variance = Param(torch.Tensor([variance]), 
-            transform=DefaultPositiveTransform())
+        self.variance = Param(
+            torch.Tensor([variance]), transform=DefaultPositiveTransform()
+        )
 
     def Kdiag(self, X):
         return self.variance.transform().expand(X.size(0))
@@ -125,8 +126,9 @@ class Stationary(Kernel):
                 per dimension (ARD=True) or a single length scale (ARD=False).
         """
         super(Stationary, self).__init__(input_dim)
-        self.variance = Param(torch.Tensor([variance]), 
-            transform=DefaultPositiveTransform())
+        self.variance = Param(
+            torch.Tensor([variance]), transform=DefaultPositiveTransform()
+        )
         self.ARD = ARD
         if ARD:
             if length_scales is None:
@@ -136,24 +138,27 @@ class Stationary(Kernel):
             else:
                 length_scales = length_scales * np.ones(input_dim)
 
-            self.length_scales = \
-                Param(torch.Tensor(length_scales), 
-                transform=DefaultPositiveTransform())
+            self.length_scales = Param(
+                torch.Tensor(length_scales), transform=DefaultPositiveTransform()
+            )
         else:
             if length_scales is None:
                 length_scales = 1.0
-            self.length_scales = \
-                Param(torch.Tensor([length_scales]), 
-                transform=DefaultPositiveTransform())
+            self.length_scales = Param(
+                torch.Tensor([length_scales]), transform=DefaultPositiveTransform()
+            )
 
     def squared_dist(self, X, X2):
         """
         Returns the SCALED squared distance between X and X2.
         """
-        return squared_distance(X / self.length_scales.transform()) \
-            if X2 is None else \
-            squared_distance(X / self.length_scales.transform(), 
-                         X2 / self.length_scales.transform())
+        return (
+            squared_distance(X / self.length_scales.transform())
+            if X2 is None
+            else squared_distance(
+                X / self.length_scales.transform(), X2 / self.length_scales.transform()
+            )
+        )
 
     def dist(self, X: torch.Tensor, X2: torch.Tensor) -> torch.Tensor:
         """
@@ -182,6 +187,7 @@ class Exp(Stationary):
 
     k(x, y; variance, length_scale) = variance * exp(-|x-y| / length_scale)
     """
+
     def K(self, X, X2=None):
         return self.variance.transform() * torch.exp(-self.dist(X, X2))
 
@@ -200,15 +206,18 @@ class Matern52(Stationary):
     def K(self, X, X2=None):
         r = self.dist(X, X2)
         s5 = torch.Tensor([np.sqrt(5.0)])
-        return self.variance.transform() * \
-               (1.0 + s5 * r + 5.0 / 3.0 * r * r) * \
-               torch.exp(-s5 * r)
+        return (
+            self.variance.transform()
+            * (1.0 + s5 * r + 5.0 / 3.0 * r * r)
+            * torch.exp(-s5 * r)
+        )
 
 
 class Rbf(Stationary):
     """
     The Radial Basis Function (RBF) or Squared Exponential / Gaussian Kernel
     """
+
     def K(self, X, X2=None):
         r2 = self.squared_dist(X, X2)
         return self.variance.transform() * torch.exp(-r2 / 2.0)
@@ -222,6 +231,7 @@ class Periodic(Stationary):
     Periodic kernel,
     k(r) = A cos(B * r)
     """
+
     def K(self, X, X2=None):
         return self.variance.transform() * torch.cos(self.dist(X, X2))
 
@@ -242,8 +252,9 @@ class Linear(Kernel):
         super().__init__(input_dim)
 
         variance, self.ARD = self._validate_ard_shape(variance, ARD)
-        self.variance = Param(torch.Tensor(variance), 
-            transform=DefaultPositiveTransform())
+        self.variance = Param(
+            torch.Tensor(variance), transform=DefaultPositiveTransform()
+        )
 
     def K(self, X, X2=None):
         if X2 is None:
@@ -263,6 +274,7 @@ class Combination(Kernel):
     it to pairs at the moment, and you can use Combinations of Combinations to
     build more expressive kernels.
     """
+
     def __init__(self, kern1, kern2):
         if not kern1.input_dim == kern2.input_dim:
             raise ValueError("Kernels need the same input_dim")
@@ -279,6 +291,7 @@ class Product(Combination):
     CAREFUL: don't leave kern1 and kern2 with trainable variances unless they
     have priors!
     """
+
     def K(self, X, X2=None):
         return self.kern1.K(X, X2) * self.kern2.K(X, X2)
 

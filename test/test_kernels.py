@@ -33,12 +33,15 @@ class Kern(object):
         self.n2, self.d2 = self.x2.data.numpy().shape
         self.kern = self.kernel_type(self.d1)
         self.kern_str = self.kern.__class__.__name__
-        self.kx_expected = np.load(os.path.join(data_dir, "{}_kx.npy".format(
-            self.kern_str)))
-        self.kx2_expected = np.load(os.path.join(data_dir, "{}_kx2.npy".format(
-            self.kern_str)))
-        self.kdiag_expected = np.load(os.path.join(data_dir, 
-            "{}_kdiag.npy".format(self.kern_str)))
+        self.kx_expected = np.load(
+            os.path.join(data_dir, "{}_kx.npy".format(self.kern_str))
+        )
+        self.kx2_expected = np.load(
+            os.path.join(data_dir, "{}_kx2.npy".format(self.kern_str))
+        )
+        self.kdiag_expected = np.load(
+            os.path.join(data_dir, "{}_kdiag.npy".format(self.kern_str))
+        )
 
     def test_add(self):
         """
@@ -105,16 +108,21 @@ class Stationary(Kern):
 class ARD(Stationary):
     def setUp(self, kernel_type):
         super().setUp(kernel_type)
-        self.ard_length_scales = np.load(os.path.join(data_dir, 
-            "ard_length_scales.npy"))
-        self.kern_ard = self.kernel_type(self.d1, ARD=True, 
-            length_scales=self.ard_length_scales)
-        self.kx_ard_expected = np.load(os.path.join(data_dir, 
-            "{}_kx_ard.npy".format(self.kern_str)))
-        self.kx2_ard_expected = np.load(os.path.join(data_dir, 
-            "{}_kx2_ard.npy".format(self.kern_str)))
-        self.kdiag_ard_expected = np.load(os.path.join(data_dir,
-            "{}_kdiag_ard.npy".format(self.kern_str)))
+        self.ard_length_scales = np.load(
+            os.path.join(data_dir, "ard_length_scales.npy")
+        )
+        self.kern_ard = self.kernel_type(
+            self.d1, ARD=True, length_scales=self.ard_length_scales
+        )
+        self.kx_ard_expected = np.load(
+            os.path.join(data_dir, "{}_kx_ard.npy".format(self.kern_str))
+        )
+        self.kx2_ard_expected = np.load(
+            os.path.join(data_dir, "{}_kx2_ard.npy".format(self.kern_str))
+        )
+        self.kdiag_ard_expected = np.load(
+            os.path.join(data_dir, "{}_kdiag_ard.npy".format(self.kern_str))
+        )
 
     def test_K(self):
         super().test_K()
@@ -131,12 +139,12 @@ class ARD(Stationary):
 
 class TestWhite(Kern, TestCase):
     def setUp(self):
-        super().setUp(kernels.White)    
+        super().setUp(kernels.White)
 
 
 class TestConstant(Kern, TestCase):
     def setUp(self):
-        super().setUp(kernels.Constant) 
+        super().setUp(kernels.Constant)
 
 
 class TestBias(Kern, TestCase):
@@ -174,8 +182,10 @@ class TestPeriodic(ARD, TestCase):
         super().setUp(kernels.Periodic)
 
 
-@pytest.mark.xfail(reason="Linear is different because we use .variance " + 
-    "instead of .length_scales (TODO)")
+@pytest.mark.xfail(
+    reason="Linear is different because we use .variance "
+    + "instead of .length_scales (TODO)"
+)
 class TestLinear(ARD, TestCase):
     def setUp(self):
         super().setUp(kernels.Linear)

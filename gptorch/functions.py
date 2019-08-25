@@ -1,4 +1,3 @@
-
 """
 ``gptorch.functions`` contains self-defined functions subclassing
 :modile:`torch.autograd.Function` that performs Cholesky decomposition, solving
@@ -12,10 +11,11 @@ from torch.nn import functional as F
 import numpy as np
 
 TRIANGULAR_SOLVE = "triangular_solve" in dir(torch)
-    
 
-def jit_op(op, x: torch.Tensor, max_tries: int=10, verbose: bool=False) \
-        -> torch.Tensor:
+
+def jit_op(
+    op, x: torch.Tensor, max_tries: int = 10, verbose: bool = False
+) -> torch.Tensor:
     """
     Attempt a potentially-unstable linear algebra operation on a matrix.
     If it fails, then try adding more and more jitter and try again...
@@ -29,13 +29,13 @@ def jit_op(op, x: torch.Tensor, max_tries: int=10, verbose: bool=False) \
 
     for i in range(max_tries):
         try:
-            this_jitter = 10.0 ** (-max_tries + i) * torch.eye(*x.shape, 
-                dtype=x.dtype)
+            this_jitter = 10.0 ** (-max_tries + i) * torch.eye(*x.shape, dtype=x.dtype)
             return op(x + this_jitter)
         except RuntimeError as e:
             if verbose:
-                print("Op {} failed (try {} / {})".format(op.__name__, i + 1, 
-                    max_tries))
+                print(
+                    "Op {} failed (try {} / {})".format(op.__name__, i + 1, max_tries)
+                )
     raise RuntimeError("Max tries exceeded.")
 
 

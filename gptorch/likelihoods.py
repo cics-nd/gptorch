@@ -32,6 +32,7 @@ class Likelihood(Model):
     2) Do the marginalization in logp(y) >= \int logp(y|f) p(f) df
         (e.g. variational inference)
     """
+
     def __init__(self):
         super(Likelihood, self).__init__()
 
@@ -55,8 +56,9 @@ class Likelihood(Model):
         return None
 
     @abc.abstractmethod
-    def propagate_log(self, qf: torch.distributions.Distribution, 
-            targets: torch.Tensor):
+    def propagate_log(
+        self, qf: torch.distributions.Distribution, targets: torch.Tensor
+    ):
         """
         Evaluate the marginal log-likelihood at the targets:
         <log p(y|f)>_q(f)
@@ -69,10 +71,12 @@ class Gaussian(Likelihood):
     """
     (Spherical) Gaussian likelihood p(y|f)
     """
+
     def __init__(self, variance=1.0):
         super(Gaussian, self).__init__()
-        self.variance = Param(torch.Tensor([variance]),
-                              transform=DefaultPositiveTransform())
+        self.variance = Param(
+            torch.Tensor([variance]), transform=DefaultPositiveTransform()
+        )
 
     def logp(self, F, Y):
         """
@@ -84,8 +88,9 @@ class Gaussian(Likelihood):
         :param Y: Targets where we want to compute the log-pdf
         :type Y: torch.autograd.Variable
         """
-        return distributions.Normal(F, torch.sqrt(self.variance.transform())). \
-            log_prob(Y)
+        return distributions.Normal(F, torch.sqrt(self.variance.transform())).log_prob(
+            Y
+        )
 
     def predict_mean_variance(self, mean_f, var_f):
         """
@@ -104,23 +109,24 @@ class Gaussian(Likelihood):
         return mean_f, var_f + self.variance.transform().expand_as(var_f)
 
     def predict_mean_covariance(self, mean_f, cov_f):
-        return mean_f, cov_f + self.variance.transform().expand_as(cov_f).\
-            diag().diag()
+        return mean_f, cov_f + self.variance.transform().expand_as(cov_f).diag().diag()
 
     def propagate_log(self, qf, targets):
-        if not isinstance(qf, torch.distributions.Normal) and not \
-                isinstance(qf, torch.distributions.MultivariateNormal):
+        if not isinstance(qf, torch.distributions.Normal) and not isinstance(
+            qf, torch.distributions.MultivariateNormal
+        ):
             raise TypeError("Expect Gaussian q(f)")
-        
+
         mu, s = qf.loc, qf.variance
         n = targets.nelement()
         if not mu.nelement() == n:
-            raise ValueError("Targets (%i) and q(f) (%i) have mismatch in size"
-                % (n, mu.nelement()))
-                
+            raise ValueError(
+                "Targets (%i) and q(f) (%i) have mismatch in size" % (n, mu.nelement())
+            )
+
         sigma_y = self.variance.transform()
 
         return -0.5 * (
             n * (torch.log(torch.Tensor([2.0 * pi])) + torch.log(sigma_y))
             + (torch.sum((targets - mu) ** 2) + s.sum()) / sigma_y
-        ) 
+        )

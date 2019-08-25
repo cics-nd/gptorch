@@ -23,14 +23,14 @@ class TestConstant(object):
 
         y = mean_functions.Constant(dy)(torch.rand(n, dx))
         assert isinstance(y, torch.Tensor)
-        assert all([e == a for e, a in zip(y.flatten(), 
-            torch.zeros(n, dy).flatten())])
+        assert all([e == a for e, a in zip(y.flatten(), torch.zeros(n, dy).flatten())])
 
         val = torch.randn(dy)
         y = mean_functions.Constant(dy, val=val)(torch.rand(n, dx))
         assert isinstance(y, torch.Tensor)
-        assert all([e == a for e, a in zip(y.flatten(), 
-            (val + torch.zeros(n, dy)).flatten())])
+        assert all(
+            [e == a for e, a in zip(y.flatten(), (val + torch.zeros(n, dy)).flatten())]
+        )
 
 
 class TestZero(object):
@@ -41,5 +41,4 @@ class TestZero(object):
         n, dx, dy = 5, 3, 2
         y = mean_functions.Zero(dy)(torch.rand(n, dx))
         assert isinstance(y, torch.Tensor)
-        assert all([e == a for e, a in zip(y.flatten(), 
-            torch.zeros(n, dy).flatten())])
+        assert all([e == a for e, a in zip(y.flatten(), torch.zeros(n, dy).flatten())])

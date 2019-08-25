@@ -7,6 +7,7 @@ Tests for model.py
 """
 
 import os, sys
+
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 import numpy as np
 import torch as th
@@ -18,4 +19,5 @@ class TestModel(object):
     """
     Tests for the Model class
     """
+
     pass

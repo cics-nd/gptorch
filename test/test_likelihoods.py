@@ -32,14 +32,15 @@ class TestGaussian(object):
         Test variance API
         """
         lik = self._standard_likelihood()
-        
+
         # Type
         assert isinstance(lik.variance, gptorch.model.Param)
 
         # Value
         print(type(lik.variance.transform()))
-        assert lik.variance.transform().data.numpy() == \
-            pytest.approx(self._expected_likelihood_variance)
+        assert lik.variance.transform().data.numpy() == pytest.approx(
+            self._expected_likelihood_variance
+        )
 
     def test_logp(self):
         """
@@ -65,19 +66,20 @@ class TestGaussian(object):
         input_mean = Variable(TensorType([0.0]))
         input_variance = Variable(TensorType([1.0]))
         expected_output_mean = input_mean
-        expected_output_variance = input_variance + \
-            self._expected_likelihood_variance
-        
+        expected_output_variance = input_variance + self._expected_likelihood_variance
+
         # API
-        output_mean, output_variance = lik.predict_mean_variance(input_mean,
-            input_variance)
+        output_mean, output_variance = lik.predict_mean_variance(
+            input_mean, input_variance
+        )
         assert isinstance(output_mean, Variable)
         assert isinstance(output_variance, Variable)
 
         # Value
         assert output_mean.data.numpy() == expected_output_mean.data.numpy()
         assert output_variance.data.numpy() == pytest.approx(
-            expected_output_variance.data.numpy())
+            expected_output_variance.data.numpy()
+        )
 
     def test_predict_mean_covariance(self):
         """
@@ -85,25 +87,31 @@ class TestGaussian(object):
         """
         lik = self._standard_likelihood()
         input_mean = Variable(TensorType([0.0, 1.0, 2.1]))
-        input_covariance = Variable(TensorType([[1.0, 0.5, 0.2], 
-            [0.5, 1.0, 0.5], [0.2, 0.5, 1.0]]))
+        input_covariance = Variable(
+            TensorType([[1.0, 0.5, 0.2], [0.5, 1.0, 0.5], [0.2, 0.5, 1.0]])
+        )
         expected_output_mean = input_mean
         # Ugh, sorry about this.  Will cleanup when we move PyTorch forward!
-        expected_output_covariance = input_covariance + \
-            Variable(TensorType([self._expected_likelihood_variance])).\
-            expand_as(input_covariance).diag().diag()
-        
+        expected_output_covariance = (
+            input_covariance
+            + Variable(TensorType([self._expected_likelihood_variance]))
+            .expand_as(input_covariance)
+            .diag()
+            .diag()
+        )
+
         # API
-        output_mean, output_covariance = lik.predict_mean_covariance(input_mean,
-            input_covariance)
+        output_mean, output_covariance = lik.predict_mean_covariance(
+            input_mean, input_covariance
+        )
         assert isinstance(output_mean, Variable)
         assert isinstance(output_covariance, Variable)
 
         # Value
-        assert all(output_mean.data.numpy() == expected_output_mean.data.numpy()
-            )
+        assert all(output_mean.data.numpy() == expected_output_mean.data.numpy())
         assert output_covariance.data.numpy() == pytest.approx(
-            expected_output_covariance.data.numpy())
+            expected_output_covariance.data.numpy()
+        )
 
     @property
     def _expected_likelihood_variance(self):

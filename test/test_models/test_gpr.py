@@ -46,7 +46,7 @@ class TestGPR(object):
         mu_var, var = model._predict(x_test)
         assert all([e == a for e, a in zip(mu_var.shape, (n_test, dy))])
         assert all([e == a for e, a in zip(var.shape, (n_test, dy))])
-        
+
         mu_cov, cov = model._predict(x_test, diag=False)
         assert all([e == a for e, a in zip(mu_cov.shape, (n_test, dy))])
         assert all([e == a for e, a in zip(cov.shape, (n_test, n_test))])

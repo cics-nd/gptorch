@@ -7,6 +7,7 @@ Demonstration of GPs for regression
 """
 
 import os, sys
+
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 import torch
 import matplotlib.pyplot as plt
@@ -23,7 +24,7 @@ np.random.seed(42)
 
 # Data
 def f(x):
-    return np.sin(2. * np.pi * x) + np.cos(3.5 * np.pi * x) - 3.0 * x + 5.0
+    return np.sin(2.0 * np.pi * x) + np.cos(3.5 * np.pi * x) - 3.0 * x + 5.0
 
 
 if __name__ == "__main__":
@@ -63,8 +64,9 @@ if __name__ == "__main__":
     plt.plot(x_test, f(x_test))
     for y_samp_i in y_samp:
         plt.plot(x_test, y_samp_i, color=(0.4, 0.7, 1.0), alpha=0.5)
-    plt.plot(x, y, 'o')
+    plt.plot(x, y, "o")
     if hasattr(model, "Z"):
-        plt.plot(model.Z.data.numpy(), 
-            1.0 + plt.ylim()[0] * np.ones(model.Z.shape[0]), "+")
+        plt.plot(
+            model.Z.data.numpy(), 1.0 + plt.ylim()[0] * np.ones(model.Z.shape[0]), "+"
+        )
     plt.show()
