@@ -32,19 +32,13 @@ if __name__ == "__main__":
     x = np.linspace(0, 1, n).reshape((-1, 1))
     y = f(x) + 0.1 * np.random.randn(n, 1)
 
-    # Try different kernels...
-    # kern = kernels.Rbf(1)
-    # kern = kernels.Matern32(1)
+    # Try different kernels...see kernels.py for lots more!
     # kern = kernels.Matern52(1)
-    # kern = kernels.Exp(1)
-    # kern = kernels.Constant(1)
-    # kern = kernels.Linear(1)
     kern = kernels.Linear(1) + kernels.Rbf(1) + kernels.Constant(1)
 
     # Try different models:
     model = GPR(x, y, kern)
     # model = VFE(x, y, kern)
-    model.likelihood.variance.data = TensorType([1.0e-6])
 
     # Train
     model.optimize(method="L-BFGS-B", max_iter=100)
@@ -70,4 +64,7 @@ if __name__ == "__main__":
     for y_samp_i in y_samp:
         plt.plot(x_test, y_samp_i, color=(0.4, 0.7, 1.0), alpha=0.5)
     plt.plot(x, y, 'o')
+    if hasattr(model, "Z"):
+        plt.plot(model.Z.data.numpy(), 
+            1.0 + plt.ylim()[0] * np.ones(model.Z.shape[0]), "+")
     plt.show()

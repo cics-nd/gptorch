@@ -172,6 +172,27 @@ class VFE(_InducingPointsGP):
         return mean, var
 
 
+def minibatch(loss_func):
+    """
+    Decorator to use minibatching for a loss function (e.g. SVGP)
+    """
+
+    def wrapped(obj, x=None, y=None):
+        if x is not None:
+            assert y is not None
+        else:
+            # Get from model:
+            if obj.batch_size is not None:
+                i = np.random.permutation(obj.num_data)[: obj.batch_size]
+                x, y = obj.X[i, :], obj.Y[i, :]
+            else:
+                x, y = obj.X, obj.Y
+        
+        return loss_func(obj, x, y)
+
+    return wrapped            
+
+
 class SVGP(_InducingPointsGP):
     """
     Sparse variational Gaussian process.
@@ -192,7 +213,7 @@ class SVGP(_InducingPointsGP):
         super().__init__(y, x, kernel, num_inducing_points=num_inducing_points, 
             inducing_points=inducing_points, mean_function=mean_function, 
             likelihood=likelihood)
-        assert batch_size is None, "Minibatching not supported yet."
+        # assert batch_size is None, "Minibatching not supported yet."
         self.batch_size = batch_size
 
         # Parameters for the Gaussian variational posterior over the induced
@@ -202,25 +223,41 @@ class SVGP(_InducingPointsGP):
         self.induced_output_mean, self.induced_output_chol_cov = \
             self._init_posterior()
 
-    def compute_loss(self):
+    @minibatch
+    def compute_loss(self, x, y):
         """
-        TODO minibatches
+        Variational bound.
         """
+
         chol_kuu = cholesky(self.kernel.K(self.Z))
 
-        f_mean, f_var = self._predict(self.X, diag=True, chol_kuu=chol_kuu)
-        q_marginal = torch.distributions.Normal(f_mean, f_var.sqrt())  # q(f)
-        marginal_log_likelihood = self.likelihood.propagate(q_marginal)
+        # Marginal posterior q(f)'s mean & variance
+        f_mean, f_var = self._predict(x, diag=True, chol_kuu=chol_kuu)
+        marginal_log_likelihood = torch.stack([
+            self.likelihood.propagate_log(
+                torch.distributions.Normal(loc_i, torch.sqrt(v_i)), yi)
+            for loc_i, v_i, yi in zip(f_mean.t(), f_var.t(), y.t())
+        ]).sum()
+        # Account for size of minibatch relative to the total dataset size:
+        marginal_log_likelihood *= self.num_data / x.shape[0]
         
-        mu_xu = self.mean_function(self.Z)
+        mu_xu = self.mean_function(self.Z)  # Prior mean
         qu_mean = self.induced_output_mean + mu_xu
         qu_lc = self.induced_output_chol_cov.transform()
-        qu = torch.distributions.MultivariateNormal(qu_mean, scale_tril=qu_lc)
-        pu = torch.distributions.MultivariateNormal(mu_xu, scale_tril=chol_kuu)
+        # Each output dimension has its own Multivariate normal (different 
+        # means, shared covariance); the joint distribution is the product 
+        # across output dimensions.
+        qus = [torch.distributions.MultivariateNormal(qu_i, scale_tril=qu_lc)
+            for qu_i in qu_mean.t()]
+        # Each dimension has its own prior as well due to the mean function
+        # Being potentially different for each output dimension.
+        pus = [torch.distributions.MultivariateNormal(mi, scale_tril=chol_kuu)
+            for mi in mu_xu.t()]
         
-        kl = torch.distributions.kl_divergence(qu, pu)
+        kl = torch.stack([torch.distributions.kl_divergence(qu, pu) 
+            for qu, pu in zip(qus, pus)]).sum()
 
-        return marginal_log_likelihood - kl
+        return -(marginal_log_likelihood - kl)
 
     def _init_posterior(self):
         """
@@ -231,21 +268,21 @@ class SVGP(_InducingPointsGP):
         This could be far worse than expected if the likelihood is non-Gaussian,
         but we don't need this to be great--just good enough to get started.
         """
-        n_tot = self.X.shape[0]
-        i = np.random.permutation(n_tot)[0: min(n_tot, 100)]
+        
+        i = np.random.permutation(self.num_data)[0: min(self.num_data, 100)]
         x, y = self.X[i].data.numpy(), self.Y[i].data.numpy()
         # Likelihood needs to be Gaussian for exact inference in GPR
         likelihood = self.likelihood if isinstance(self.likelihood, Gaussian) \
             else Gaussian(variance=0.01 * y.var())
-        model = GPR(y, x, self.kernel, mean_function=self.mean_function,
+        model = GPR(x, y, self.kernel, mean_function=self.mean_function,
             likelihood=likelihood)
-        mean, cov = model._predict(self.Z, diag=False)  # FIXME predict_f!!!
+        mean, cov = model.predict_f(self.Z, diag=False)
         mean -= self.mean_function(self.Z) 
         chol_cov = cholesky(cov)
 
         return Param(mean), Param(chol_cov, transform=LowerCholeskyTransform())
 
-    def _predict(self, input_new: TensorType, diag=True, chol_kuu=None):
+    def _predict(self, x_new: TensorType, diag=True, chol_kuu=None):
         """
         SVGP Prediction uses inducing points as sufficient statistics for the 
         posterior.
@@ -254,33 +291,39 @@ class SVGP(_InducingPointsGP):
         something specific to (positive-definite) kernel matrices should 
         perform better.
 
-        :param input_new: inputs to predict on.
+        Shapes of outputs are:
+        diag: both are [N x dy]
+        not diag: mean is [N x dy], cov is [N x N]
+
+        :param x_new: inputs to predict on.
         :param diag: if True, return variance of prediction; False=full cov
         :param chol_kuu: The Cholesky of the kernel matrix for the inducing 
             inputs (to enable reuse when computing the training loss)
+    
+        :return: (torch.Tensor, torch.Tensor) mean & [co]variance
         """
-        # TODO move this to predict_f()!
-        if isinstance(input_new, np.ndarray):
-            input_new = TensorType(input_new)
 
         chol_kuu = cholesky(self.kernel.K(self.Z)) if chol_kuu is None else \
             chol_kuu
-        kuf = self.kernel.K(self.Z, input_new)
+        kuf = self.kernel.K(self.Z, x_new)
         alpha = trtrs(kuf, chol_kuu).t()
-        # beta @ beta.t() = inv(kuu) @ S @ inv(kuu), S=post cov of induced outs
-        beta = trtrs(self.induced_output_chol_cov.transform(), chol_kuu)
-        mu_x = self.mean_function(input_new)
+        # beta @ beta.t() = inv(L) @ S @ inv(L'), S=post cov of induced outs
+        beta = trtrs(self.induced_output_chol_cov, chol_kuu)
+        mu_x = self.mean_function(x_new)
 
-        # Remember: induced_output_mean doesn't include mean function.
+        # Remember: induced_output_mean doesn't include mean function, so no 
+        # need to subtract it.
         f_mean = alpha @ trtrs(self.induced_output_mean, chol_kuu) + mu_x
 
+        # gamma @ gamma.t() = Kfu @ inv(Kuu) @ S @ inv(Kuu) @ Kuf
         gamma = alpha @ beta
 
         if diag:
-            f_cov = self.kernel.Kdiag(input_new) - \
-                torch.sum(alpha ** 2, dim=1) - torch.sum(gamma ** 2, dim=1)
+            f_cov = (self.kernel.Kdiag(x_new) - \
+                torch.sum(alpha ** 2, dim=1) + torch.sum(gamma ** 2, dim=1)) \
+                [:, None].expand_as(f_mean)
         else:
-            f_cov = self.kernel.K(input_new) - alpha @ alpha.t() - \
+            f_cov = self.kernel.K(x_new) - alpha @ alpha.t() + \
                 gamma @ gamma.t()
         
         return f_mean, f_cov

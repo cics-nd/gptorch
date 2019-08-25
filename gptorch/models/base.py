@@ -72,6 +72,18 @@ class GPModel(Model):
         
         self.__class__.__name__ = name
 
+    @property
+    def num_data(self):
+        return self.Y.shape[0]
+
+    @property
+    def input_dimension(self):
+        return self.X.shape[1]
+
+    @property
+    def output_shape(self):
+        return self.Y.shape[1]
+    
     def compute_loss(self):
         """
         Defines computation graph upon every call - PyTorch

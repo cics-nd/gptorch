@@ -4,6 +4,7 @@
 # class for likelihoods: p(y | f)
 
 import abc
+from math import pi
 
 from torch.nn import Parameter
 import torch
@@ -54,7 +55,8 @@ class Likelihood(Model):
         return None
 
     @abc.abstractmethod
-    def propagate_log(self, qf, targets):
+    def propagate_log(self, qf: torch.distributions.Distribution, 
+            targets: torch.Tensor):
         """
         Evaluate the marginal log-likelihood at the targets:
         <log p(y|f)>_q(f)
@@ -104,3 +106,21 @@ class Gaussian(Likelihood):
     def predict_mean_covariance(self, mean_f, cov_f):
         return mean_f, cov_f + self.variance.transform().expand_as(cov_f).\
             diag().diag()
+
+    def propagate_log(self, qf, targets):
+        if not isinstance(qf, torch.distributions.Normal) and not \
+                isinstance(qf, torch.distributions.MultivariateNormal):
+            raise TypeError("Expect Gaussian q(f)")
+        
+        mu, s = qf.loc, qf.variance
+        n = targets.nelement()
+        if not mu.nelement() == n:
+            raise ValueError("Targets (%i) and q(f) (%i) have mismatch in size"
+                % (n, mu.nelement()))
+                
+        sigma_y = self.variance.transform()
+
+        return -0.5 * (
+            n * (torch.log(torch.Tensor([2.0 * pi])) + torch.log(sigma_y))
+            + (torch.sum((targets - mu) ** 2) + s.sum()) / sigma_y
+        ) 
