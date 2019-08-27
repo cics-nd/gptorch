@@ -355,7 +355,7 @@ class SVGP(_InducingPointsGP):
         kuf = self.kernel.K(self.Z, x_new)
         alpha = trtrs(kuf, chol_kuu).t()
         # beta @ beta.t() = inv(L) @ S @ inv(L'), S=post cov of induced outs
-        beta = trtrs(self.induced_output_chol_cov, chol_kuu)
+        beta = trtrs(self.induced_output_chol_cov.transform(), chol_kuu)
         mu_x = self.mean_function(x_new)
 
         # Remember: induced_output_mean doesn't include mean function, so no
