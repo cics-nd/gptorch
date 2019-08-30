@@ -47,7 +47,8 @@ class _InducingPointsGP(GPModel):
         if inducing_points is None:
             if num_inducing_points is None:
                 num_inducing_points = np.clip(x.shape[0] // 10, 1, 100)
-            inducing_points = kmeans_centers(x, num_inducing_points)
+            inducing_points = kmeans_centers(x, num_inducing_points, 
+                perturb_if_fail=True)
             # indices = np.random.permutation(len(x))[:num_inducing_points]
             # inducing_points = TensorType(x[indices])
             print("Inducing points:\n{}".format(inducing_points))

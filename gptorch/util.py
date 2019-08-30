@@ -71,14 +71,22 @@ def KL_Gaussian(m1, m2, S1, S2):
     raise NotImplementedError("")
 
 
-def kmeans_centers(x: np.ndarray, k: int) -> np.ndarray:
+def kmeans_centers(x: np.ndarray, k: int, perturb_if_fail: bool=False) -> \
+        np.ndarray:
     """
     Use k-means clustering and find the centers of the clusters.
     :param x: The data
     :param k: Number of clusters
+    :param perturb_if_fail: Move the points randomly in case of a numpy 
+        LinAlgError.
     :return: the centers
     """
-    return kmeans2(x, k)[0]
+    try:
+        return kmeans2(x, k)[0]
+    except np.linalg.LinAlgError:
+        x_scale = x.std(axis=0)
+        x_perturbed = x + 1.0e-4 * x_scale * np.random.randn(*x.shape)
+        return kmeans2(x_perturbed, k)[0]
 
 
 def PCA(X, q):
