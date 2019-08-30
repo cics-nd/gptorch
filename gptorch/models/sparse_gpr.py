@@ -35,7 +35,7 @@ class _InducingPointsGP(GPModel):
         num_inducing_points=None,
         inducing_points=None,
         mean_function=None,
-        likelihood=Gaussian(),
+        likelihood=None,
     ):
         """
         Assume Gaussian likelihood

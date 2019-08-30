@@ -11,6 +11,7 @@ import torch
 from time import time
 from scipy.optimize import minimize
 
+from .. import likelihoods
 from ..functions import cholesky
 from ..mean_functions import Zero
 from ..model import Model
@@ -51,12 +52,13 @@ class GPModel(Model):
             mean_function (gptorch.MeanFunction):
             name (string): name of this model
         """
+
         super().__init__()
         self.kernel = kernel
-        self.likelihood = likelihood
-        self.mean_function = (
-            mean_function if mean_function is not None else Zero(y.shape[1])
-        )
+        self.likelihood = likelihood if likelihood is not None else \
+            GPModel._init_gaussian_likelihood(y)
+        self.mean_function = mean_function if mean_function is not None else \
+            Zero(y.shape[1])
 
         allowed_data_types = (np.ndarray, torch.Tensor)
         assert type(x) in allowed_data_types, "x must be one of {}".format(
@@ -100,8 +102,18 @@ class GPModel(Model):
     #     # data usually includes observations and input
     #     return self.compute_likelihood(*data)
 
-    def optimize(self, method="Adam", max_iter=2000, verbose=True, learning_rate=None):
+    @staticmethod
+    def _init_gaussian_likelihood(y) -> likelihoods.Gaussian:
+        """
+        A handy heuristic for initializing Gaussian likelihoods for models: make
+        the standard deviation roughly 3% of the total output variance.
 
+        :param y: Outputs.  Can be either torch.Tensor or np.ndarray
+        """
+        return likelihoods.Gaussian(variance=0.001 * y.var())
+
+    def optimize(self, method='Adam', max_iter=2000, verbose=True,
+            learning_rate=None):
         """
         Optimizes the model by minimizing the loss (from :method:) w.r.t.
         model parameters.
@@ -120,9 +132,26 @@ class GPModel(Model):
         """
         parameters = filter(lambda p: p.requires_grad, self.parameters())
 
+        default_learning_rates = {
+            "SGD": 0.001,
+            "Adam": 0.01,
+            "LBFGS": 1.0,
+            "Adadelta": 1.0,
+            "Adagrad": 0.01,
+            "Adamax": 0.002,
+            "ASGD": 0.01,
+            "RMSprop": 0.01,
+            "Rprop": 0.01
+        }
+        if learning_rate is None and method in default_learning_rates:
+            learning_rate = default_learning_rates[method]
         if method == "SGD":
+            # GPs seem to benefit from a more aggressive learning rate than the
+            # usual "0.001 or so" that NNs like.
+            learning_rate = learning_rate if learning_rate is not None else 0.01
             self.optimizer = torch.optim.SGD(parameters, lr=learning_rate, momentum=0.9)
         elif method == "Adam":
+            learning_rate = learning_rate if learning_rate is not None else 0.01
             self.optimizer = torch.optim.Adam(parameters, lr=learning_rate)
         elif method == "LBFGS":
             if learning_rate is None:
@@ -139,20 +168,21 @@ class GPModel(Model):
             )
         elif method == "Adadelta":
             self.optimizer = torch.optim.Adadelta(
-                parameters, lr=1.0, rho=0.9, eps=1e-06, weight_decay=0.00001
+                parameters, lr=learning_rate, rho=0.9, eps=1e-06, 
+                weight_decay=0.00001
             )
         elif method == "Adagrad":
             self.optimizer = torch.optim.Adagrad(
-                parameters, lr=0.01, lr_decay=0, weight_decay=0
+                parameters, lr=learning_rate, lr_decay=0, weight_decay=0
             )
         elif method == "Adamax":
             self.optimizer = torch.optim.Adamax(
-                parameters, lr=0.002, betas=(0.9, 0.999), eps=1e-08, weight_decay=0
+                parameters, lr=learning_rate, betas=(0.9, 0.999), eps=1e-08, weight_decay=0
             )
         elif method == "ASGD":
             self.optimizer = torch.optim.ASGD(
                 parameters,
-                lr=0.01,
+                lr=learning_rate,
                 lambd=0.0001,
                 alpha=0.75,
                 t0=1000000.0,
@@ -161,7 +191,7 @@ class GPModel(Model):
         elif method == "RMSprop":
             self.optimizer = torch.optim.RMSprop(
                 parameters,
-                lr=0.01,
+                lr=learning_rate,
                 alpha=0.99,
                 eps=1e-08,
                 weight_decay=0.00,
@@ -170,7 +200,7 @@ class GPModel(Model):
             )
         elif method == "Rprop":
             self.optimizer = torch.optim.Rprop(
-                parameters, lr=0.01, etas=(0.5, 1.2), step_sizes=(1e-06, 50)
+                parameters, lr=learning_rate, etas=(0.5, 1.2), step_sizes=(1e-06, 50)
             )
         # scipy.optimize.minimize
         # suggest to use L-BFGS-B, BFGS
@@ -191,7 +221,7 @@ class GPModel(Model):
             return self._optimize_scipy(method=method, maxiter=max_iter, disp=verbose)
 
         else:
-            raise Exception(
+            raise ValueError(
                 "Optimizer %s is not found. Please choose one of the"
                 "following optimizers supported in PyTorch:"
                 "Adadelt, Adagrad, Adam, Adamax, ASGD, LBFGS, "
