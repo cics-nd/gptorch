@@ -11,6 +11,7 @@ import torch
 from time import time
 from scipy.optimize import minimize
 
+from .. import likelihoods
 from ..functions import cholesky
 from ..mean_functions import Zero
 from ..model import Model
@@ -51,9 +52,11 @@ class GPModel(Model):
             mean_function (gptorch.MeanFunction):
             name (string): name of this model
         """
+
         super().__init__()
         self.kernel = kernel
-        self.likelihood = likelihood
+        self.likelihood = likelihood if likelihood is not None else \
+            GPModel._init_gaussian_likelihood(y)
         self.mean_function = mean_function if mean_function is not None else \
             Zero(y.shape[1])
 
@@ -84,6 +87,16 @@ class GPModel(Model):
     #     # Responds to the NotImplementedError in super class: torch.nn.Module
     #     # data usually includes observations and input
     #     return self.compute_likelihood(*data)
+
+    @staticmethod
+    def _init_gaussian_likelihood(y) -> likelihoods.Gaussian:
+        """
+        A handy heuristic for initializing Gaussian likelihoods for models: make
+        the standard deviation roughly 3% of the total output variance.
+
+        :param y: Outputs.  Can be either torch.Tensor or np.ndarray
+        """
+        return likelihoods.Gaussian(variance=0.001 * y.var())
 
     def optimize(self, method='Adam', max_iter=2000, verbose=True,
                  learning_rate=None):

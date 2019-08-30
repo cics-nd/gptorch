@@ -44,7 +44,6 @@ if __name__ == "__main__":
     # Try different models:
     model = GPR(x, y, kern)
     # model = VFE(x, y, kern)
-    model.likelihood.variance.data = TensorType([1.0e-6])
 
     # Train
     model.optimize(method="L-BFGS-B", max_iter=100)

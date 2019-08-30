@@ -42,8 +42,7 @@ class GPR(GPModel):
                 for computing the parameterized mean function.
             likelihood (Likelihood): A likelihood model
         """
-        if likelihood is None:
-            likelihood = likelihoods.Gaussian()
+        
         super().__init__(x, y, kernel, likelihood, mean_function, name)
 
     def compute_loss(self):

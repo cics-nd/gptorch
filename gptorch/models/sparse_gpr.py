@@ -25,7 +25,7 @@ class _InducingPointsGP(GPModel):
     Parent class for GPs with inducing points
     """
     def __init__(self, x, y, kernel, num_inducing_points=None, 
-            inducing_points=None, mean_function=None, likelihood=Gaussian()):
+            inducing_points=None, mean_function=None, likelihood=None):
         """
         Assume Gaussian likelihood
 
@@ -41,7 +41,7 @@ class _InducingPointsGP(GPModel):
         points (up to 100) will be draw randomly from input as the inducing 
         points.
         """
-        
+
         super().__init__(x, y, kernel, likelihood, mean_function)
 
         if inducing_points is None:
