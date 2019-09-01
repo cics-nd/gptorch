@@ -19,6 +19,7 @@ class TestGPModel(object):
     """
     Tests for the GPModel class
     """
+
     def test_predict_f_samples(self):
         # TODO mock a GPModel?  Using GPR for the moment.
         n, dx, dy = 5, 3, 2

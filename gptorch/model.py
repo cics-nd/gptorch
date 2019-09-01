@@ -1,6 +1,6 @@
 # Yinhao Zhu
 # yzhu10@nd.edu
-# April 16, 2017  
+# April 16, 2017
 
 """
 Basic model and parameter classes for Gaussian Processes, inheriting from
@@ -21,14 +21,14 @@ torch.set_default_dtype(torch_dtype)
 
 
 def _addindent(s_, numSpaces):
-    s = s_.split('\n')
+    s = s_.split("\n")
     # dont do anything for single-line stuff
     if len(s) == 1:
         return s_
     first = s.pop(0)
-    s = [(numSpaces * ' ') + line for line in s]
-    s = '\n'.join(s)
-    s = first + '\n' + s
+    s = [(numSpaces * " ") + line for line in s]
+    s = "\n".join(s)
+    s = first + "\n" + s
     return s
 
 
@@ -36,19 +36,19 @@ class Model(torch.nn.Module):
     """
     Customized Model class for all GP objects
     """
+
     def forward(self):
         return None
 
     def __repr__(self):
-        tmpstr = self.__class__.__name__ + ' (\n'
+        tmpstr = self.__class__.__name__ + " (\n"
         for name, param in self._parameters.items():
-            tmpstr = tmpstr + name + '\n' + \
-                     str(param.transform().data)  + '\n'
+            tmpstr = tmpstr + name + "\n" + str(param.transform().data) + "\n"
         for key, module in self._modules.items():
             modstr = module.__repr__()
             modstr = _addindent(modstr, 2)
-            tmpstr = tmpstr + '  (' + key + '): ' + modstr + '\n'
-        tmpstr = tmpstr + ')' + '\n'
+            tmpstr = tmpstr + "  (" + key + "): " + modstr + "\n"
+        tmpstr = tmpstr + ")" + "\n"
         return tmpstr
 
     # Three functions wrap the scipy.optimize.minimize
@@ -75,7 +75,9 @@ class Model(torch.nn.Module):
         for param in self.parameters():
             if param.requires_grad:
                 idx_next = idx_current + np.prod(param.data.size())
-                param_np = np.reshape(param_array[idx_current: idx_next], param.data.numpy().shape)
+                param_np = np.reshape(
+                    param_array[idx_current:idx_next], param.data.numpy().shape
+                )
                 idx_current = idx_next
                 param.data = torch.Tensor(param_np)
 
@@ -119,7 +121,7 @@ class Model(torch.nn.Module):
             # if name in ['Z']:
             #     print('Z: %s' % param.data)
             #     print('grad of Z: %s' % param.grad)
-        print('loss: %s' % loss.data.numpy())
+        print("loss: %s" % loss.data.numpy())
         grad = np.concatenate(grad)
         grad_isfinite = np.isfinite(grad)
         ## scipy.optimizer.minimize.L-BFGS-B expects double precision (Fortran)
@@ -128,8 +130,10 @@ class Model(torch.nn.Module):
         else:
             # self._previous_x = x  # store the last known good value
             print("Warning: inf or nan in gradient: replacing with zeros")
-            return loss.data.numpy().astype(np.float64), \
-                   np.where(grad_isfinite, grad, 0.).astype(np.float64)
+            return (
+                loss.data.numpy().astype(np.float64),
+                np.where(grad_isfinite, grad, 0.0).astype(np.float64),
+            )
 
     # Functions for using gradcheck on your model.
     # Use self.loss as the function to be grad-checked, and provide the inputs
@@ -151,7 +155,8 @@ class Model(torch.nn.Module):
                 param.data = arg.data
             elif isinstance(arg, np.ndarray):
                 raise NotImplementedError(
-                    "Unresolved issues with expanding numpy arrays")
+                    "Unresolved issues with expanding numpy arrays"
+                )
 
     def loss(self, *args):
         """
@@ -180,5 +185,6 @@ class Model(torch.nn.Module):
         """
         if verbose:
             warn("Verbose not yet figured out")
-        return gradcheck(self.loss, self.extract_params(), eps=eps, atol=atol,
-                         rtol=rtol)
+        return gradcheck(
+            self.loss, self.extract_params(), eps=eps, atol=atol, rtol=rtol
+        )

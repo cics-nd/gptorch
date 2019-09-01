@@ -12,11 +12,22 @@ TensorType = torch.DoubleTensor
 torch_dtype = torch.double
 
 
-gamma_cof=[57.1562356658629235,-59.5979603554754912,
-    14.1360979747417471,-0.491913816097620199,.339946499848118887e-4,
-    .465236289270485756e-4,-.983744753048795646e-4,.158088703224912494e-3,
-    -.210264441724104883e-3,.217439618115212643e-3,-.164318106536763890e-3,
-    .844182239838527433e-4,-.261908384015814087e-4,.368991826595316234e-5]
+gamma_cof = [
+    57.1562356658629235,
+    -59.5979603554754912,
+    14.1360979747417471,
+    -0.491913816097620199,
+    0.339946499848118887e-4,
+    0.465236289270485756e-4,
+    -0.983744753048795646e-4,
+    0.158088703224912494e-3,
+    -0.210264441724104883e-3,
+    0.217439618115212643e-3,
+    -0.164318106536763890e-3,
+    0.844182239838527433e-4,
+    -0.261908384015814087e-4,
+    0.368991826595316234e-5,
+]
 
 
 def tensor_type():
@@ -102,7 +113,7 @@ def PCA(X, q):
         (np.ndarray(n, q)): PCA projection array of Z
 
     """
-    assert q <= X.shape[1], 'Cannot have more latent dimensions than observed'
+    assert q <= X.shape[1], "Cannot have more latent dimensions than observed"
     evals, evecs = np.linalg.eigh(np.cov(X.T))
     indices = np.argsort(evals)[::-1]
     W = evecs[:, indices]
@@ -121,18 +132,18 @@ def gammaln(xx):
         ln(gamma(xx)) (Variable): natural log of desired gamma value
     """
 
-    if (xx <= 0):
-        raise ValueError('Illegal value for gammaln!')
+    if xx <= 0:
+        raise ValueError("Illegal value for gammaln!")
     y = x = xx
-    tmp = x + 5.24218750000000000    #Rational 671/128.
-    tmp = (x+0.5)*np.log(tmp)-tmp
-    ser = 0.999999999999997092 #First coefficiect
-    for i in range(0,14):
-        ser += gamma_cof[i]/(y + i + 1)
-    return tmp+np.log(2.5066282746310005*ser/x)
+    tmp = x + 5.24218750000000000  # Rational 671/128.
+    tmp = (x + 0.5) * np.log(tmp) - tmp
+    ser = 0.999999999999997092  # First coefficiect
+    for i in range(0, 14):
+        ser += gamma_cof[i] / (y + i + 1)
+    return tmp + np.log(2.5066282746310005 * ser / x)
 
 
-def squared_distance(x1: TensorType, x2: TensorType=None) -> TensorType:
+def squared_distance(x1: TensorType, x2: TensorType = None) -> TensorType:
     """
     Given points x1 [n1 x d1] and x2 [n2 x d2], return a [n1 x n2] matrix with
     the pairwise squared distances between the points.
@@ -142,4 +153,4 @@ def squared_distance(x1: TensorType, x2: TensorType=None) -> TensorType:
     x1s = x1.pow(2).sum(1, keepdim=True)
     x2s = x2.pow(2).sum(1, keepdim=True)
     # Prevent negative squared distances
-    return torch.clamp(x1s + x2s.t() -2.0 * x1 @ x2.t(), min=0.0)
+    return torch.clamp(x1s + x2s.t() - 2.0 * x1 @ x2.t(), min=0.0)

@@ -3,6 +3,9 @@
 #
 # class for likelihoods: p(y | f)
 
+import abc
+from math import pi
+
 from torch.nn import Parameter
 import torch
 from torch import distributions
@@ -16,10 +19,20 @@ torch.set_default_dtype(torch_dtype)
 
 class Likelihood(Model):
     """
-    Base class for likelihoods, i.e. objects handling the conditional 
-    probability relating observed targets y and a (GP) latent function f,
-    p(y|f)
+    Probabilities that conventionally factorize across data.
+    Typically used as the "second stage" of a GP model that goes 
+    x -(GP)-> f -(likelihood)-> y
+    x = inputs
+    f = latent outputs
+    y = observed outputs
+
+    We typically have two uses for these:
+    1) Do the marginalization in p(y|x) = \int p(y|f) p(f|x) df 
+        (e.g. predictions)
+    2) Do the marginalization in logp(y) >= \int logp(y|f) p(f) df
+        (e.g. variational inference)
     """
+
     def __init__(self):
         super(Likelihood, self).__init__()
 
@@ -42,15 +55,28 @@ class Likelihood(Model):
     def forward(self):
         return None
 
+    @abc.abstractmethod
+    def propagate_log(
+        self, qf: torch.distributions.Distribution, targets: torch.Tensor
+    ):
+        """
+        Evaluate the marginal log-likelihood at the targets:
+        <log p(y|f)>_q(f)
+        Used in variational inference.
+        """
+        raise NotImplementedError("Implement quadrature fallback")
+
 
 class Gaussian(Likelihood):
     """
     (Spherical) Gaussian likelihood p(y|f)
     """
+
     def __init__(self, variance=1.0):
         super(Gaussian, self).__init__()
-        self.variance = Param(torch.Tensor([variance]),
-                              transform=DefaultPositiveTransform())
+        self.variance = Param(
+            torch.Tensor([variance]), transform=DefaultPositiveTransform()
+        )
 
     def logp(self, F, Y):
         """
@@ -62,8 +88,9 @@ class Gaussian(Likelihood):
         :param Y: Targets where we want to compute the log-pdf
         :type Y: torch.autograd.Variable
         """
-        return distributions.Normal(F, torch.sqrt(self.variance.transform())). \
-            log_prob(Y)
+        return distributions.Normal(F, torch.sqrt(self.variance.transform())).log_prob(
+            Y
+        )
 
     def predict_mean_variance(self, mean_f, var_f):
         """
@@ -82,5 +109,24 @@ class Gaussian(Likelihood):
         return mean_f, var_f + self.variance.transform().expand_as(var_f)
 
     def predict_mean_covariance(self, mean_f, cov_f):
-        return mean_f, cov_f + self.variance.transform().expand_as(cov_f).\
-            diag().diag()
+        return mean_f, cov_f + self.variance.transform().expand_as(cov_f).diag().diag()
+
+    def propagate_log(self, qf, targets):
+        if not isinstance(qf, torch.distributions.Normal) and not isinstance(
+            qf, torch.distributions.MultivariateNormal
+        ):
+            raise TypeError("Expect Gaussian q(f)")
+
+        mu, s = qf.loc, qf.variance
+        n = targets.nelement()
+        if not mu.nelement() == n:
+            raise ValueError(
+                "Targets (%i) and q(f) (%i) have mismatch in size" % (n, mu.nelement())
+            )
+
+        sigma_y = self.variance.transform()
+
+        return -0.5 * (
+            n * (torch.log(torch.Tensor([2.0 * pi])) + torch.log(sigma_y))
+            + (torch.sum((targets - mu) ** 2) + s.sum()) / sigma_y
+        )

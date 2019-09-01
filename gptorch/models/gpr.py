@@ -23,8 +23,8 @@ class GPR(GPModel):
     """
     Gaussian Process Regression
     """
-    def __init__(self, x, y, kernel, mean_function=None,
-                 likelihood=None, name='gpr'):
+
+    def __init__(self, x, y, kernel, mean_function=None, likelihood=None, name="gpr"):
         """
         Default likelihood is Gaussain, mean function is zero.
 
@@ -58,8 +58,7 @@ class GPR(GPModel):
         L = cholesky(self._compute_kyy())
         alpha = trtrs(self.Y - self.mean_function(self.X), L)
         const = TensorType([-0.5 * dim_output * num_input * np.log(2 * np.pi)])
-        loss = 0.5 * alpha.pow(2).sum() + dim_output * lt_log_determinant(L) \
-            - const
+        loss = 0.5 * alpha.pow(2).sum() + dim_output * lt_log_determinant(L) - const
         return loss
 
     def _compute_kyy(self):
@@ -71,9 +70,13 @@ class GPR(GPModel):
         """
         num_input = self.Y.size(0)
 
-        return self.kernel.K(self.X) + \
-        (self.likelihood.variance.transform()).expand(
-            num_input, num_input).diag().diag()
+        return (
+            self.kernel.K(self.X)
+            + (self.likelihood.variance.transform())
+            .expand(num_input, num_input)
+            .diag()
+            .diag()
+        )
 
     def _predict(self, x_new: TensorType, diag=True):
         """
@@ -93,13 +96,12 @@ class GPR(GPModel):
         V = trtrs(self.Y - self.mean_function(self.X), L)
         mean_f = A.t() @ V + self.mean_function(x_new)
 
-        var_f_1 = self.kernel.Kdiag(x_new) if diag else \
-            self.kernel.K(x_new)  # Kss
-
         if diag:
-            var_f_2 = (A * A).sum(0)
+            var_f = (
+                self.kernel.Kdiag(x_new) - 
+                (A * A).sum(0)
+            )[:, None].expand_as(mean_f)
         else:
-            var_f_2 = A.t() @  A
-        var_f = var_f_1 - var_f_2
+            var_f = self.kernel.K(x_new) - A.t() @ A
 
         return mean_f, var_f
