@@ -96,12 +96,12 @@ class GPR(GPModel):
         V = trtrs(self.Y - self.mean_function(self.X), L)
         mean_f = A.t() @ V + self.mean_function(x_new)
 
-        var_f_1 = self.kernel.Kdiag(x_new) if diag else self.kernel.K(x_new)  # Kss
-
         if diag:
-            var_f_2 = (A * A).sum(0)
+            var_f = (
+                self.kernel.Kdiag(x_new) - 
+                (A * A).sum(0)
+            )[:, None].expand_as(mean_f)
         else:
-            var_f_2 = A.t() @ A
-        var_f = var_f_1 - var_f_2
+            var_f = self.kernel.K(x_new) - A.t() @ A
 
         return mean_f, var_f

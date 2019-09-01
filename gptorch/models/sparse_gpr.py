@@ -150,7 +150,7 @@ class VFE(_InducingPointsGP):
         elbo += 0.5 * c.pow(2).sum()
         elbo += 0.5 * dim_output * AAT.diag().sum()
 
-        return -elbo
+        return -elbo[0]
 
     def _predict(self, x_new: TensorType, diag=True):
         """
@@ -188,7 +188,7 @@ class VFE(_InducingPointsGP):
                 self.kernel.Kdiag(x_new)
                 - tmp1.pow(2).sum(0).squeeze()
                 + tmp2.pow(2).sum(0).squeeze()
-            )
+            )[:, None].expand_as(mean)
         else:
             var = self.kernel.K(x_new) + tmp2.t() @ tmp2 - tmp1.t() @ tmp1
 

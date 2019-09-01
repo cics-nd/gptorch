@@ -324,6 +324,16 @@ class GPModel(Model):
         return result
 
     def _predict(self, input_new: torch.Tensor, diag=True):
+        """
+        Predict hte latent output function at input_new.
+
+        If diag=True, then the outputs are the predictive mean and variance, 
+        both of shape [n x dy].
+        If diag=False, then we predict the full covariance [n x n]; the mean is 
+        the same.
+
+        :return: (torch.Tensor, torch.Tensor)
+        """
         # diag: is a flag indicates whether only returns the diagonal of
         # predictive variance at input_new
         # :param input_new: np.ndarray
