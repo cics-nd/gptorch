@@ -86,7 +86,7 @@ class GPModel(Model):
         return self.X.shape[1]
 
     @property
-    def output_shape(self):
+    def output_dimension(self):
         return self.Y.shape[1]
 
     def compute_loss(self):

@@ -115,9 +115,9 @@ class VFE(_InducingPointsGP):
         in Sparse Gaussian Processes." AISTATS. Vol. 5. 2009.
         """
 
-        num_inducing = self.Z.size(0)
-        num_training = self.X.size(0)
-        dim_output = self.Y.size(1)
+        num_inducing = self.num_inducing
+        num_data = self.num_data
+        d_out = self.output_dimension
         # TODO: add mean_functions
         # err = self.Y - self.mean_function(self.X)
         err = self.Y
@@ -137,18 +137,18 @@ class VFE(_InducingPointsGP):
         c = trtrs(A @ err, LB) / self.likelihood.variance.transform()
 
         # Evidence lower bound
-        elbo = TensorType([-0.5 * dim_output * num_training * np.log(2 * np.pi)])
-        elbo -= dim_output * LB.diag().log().sum()
+        elbo = TensorType([-0.5 * d_out * num_data * np.log(2 * np.pi)])
+        elbo -= d_out * LB.diag().log().sum()
         elbo -= (
-            0.5 * dim_output * num_training * self.likelihood.variance.transform().log()
+            0.5 * d_out * num_data * self.likelihood.variance.transform().log()
         )
         elbo -= (
             0.5
-            * (err.pow(2).sum() + dim_output * Kff_diag.sum())
+            * (err.pow(2).sum() + d_out * Kff_diag.sum())
             / self.likelihood.variance.transform()
         )
         elbo += 0.5 * c.pow(2).sum()
-        elbo += 0.5 * dim_output * AAT.diag().sum()
+        elbo += 0.5 * d_out * AAT.diag().sum()
 
         return -elbo[0]
 
