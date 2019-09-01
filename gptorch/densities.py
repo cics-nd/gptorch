@@ -4,7 +4,7 @@
 # class for probability density functions
 from __future__ import absolute_import
 from . import util as ut
-from .functions import cholesky, inverse
+from .functions import cholesky, inverse, cholesky_inverse
 
 import torch as th
 import numpy as np
@@ -355,7 +355,7 @@ class GaussianMultivariateFull(Density):
     def _get_precision(self):
         if self._l is None:
             self._get_chol()
-        self._precision = Variable(torch.potri(self._l.data))
+        self._precision = Variable(cholesky_inverse(self._l.data.t()))
 
     def _get_chol(self):
         self._l = cholesky(self.sigma).t()
