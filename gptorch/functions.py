@@ -10,6 +10,9 @@ from .util import as_tensor
 import torch
 from torch.nn import functional as F
 import numpy as np
+
+torch_version = [int(s) for s in torch.__version__.split(".")]
+_potri = torch.cholesky_inverse if torch_version >= [1, 1, 0] else torch.potri
     
 
 def jit_op(op, x: torch.Tensor, max_tries: int=10, verbose: bool=False) \
@@ -39,6 +42,13 @@ def jit_op(op, x: torch.Tensor, max_tries: int=10, verbose: bool=False) \
 
 def cholesky(x: torch.Tensor) -> torch.Tensor:
     return jit_op(torch.cholesky, x)
+
+
+def cholesky_inverse(x: torch.Tensor, upper=False) -> torch.Tensor:
+    """
+    Inverse of a matrix based on its Cholesky.
+    """
+    return _potri(x, upper=upper)
 
 
 def inverse(x: torch.Tensor) -> torch.Tensor:
