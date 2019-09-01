@@ -24,7 +24,7 @@ requirements = [
 ]
 
 setup(name="gptorch",
-    version="0.2.1",
+    version="0.2.2",
     description="gptorch - a Gaussian process toolbox built on PyTorch",
     author="Yinhao Zhu, Steven Atkinson",
     author_email="yzhu10@nd.edu, satkinso@nd.edu",
