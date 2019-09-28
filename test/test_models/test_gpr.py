@@ -8,7 +8,7 @@ import torch
 
 from gptorch.models import GPR
 from gptorch.kernels import Rbf
-from gptorch.util import torch_dtype
+from gptorch.util import torch_dtype, TensorType
 
 torch.set_default_dtype(torch_dtype)
 
@@ -35,6 +35,15 @@ class TestGPR(object):
         loss = model.compute_loss()
         assert isinstance(loss, torch.Tensor)
         assert loss.ndimension() == 1  # TODO change this...
+
+        # Test ability to specify x and y
+        loss_xy = model.compute_loss(x=TensorType(x), y=TensorType(y))
+        assert isinstance(loss_xy, torch.Tensor)
+        assert loss_xy.item() == loss.item()
+
+        with pytest.raises(ValueError):
+            # Size mismatch
+            model.compute_loss(x=TensorType(x[:n // 2]))
 
     def test_predict(self):
         n, n_test, dx, dy = 5, 7, 3, 2

@@ -108,21 +108,26 @@ class VFE(_InducingPointsGP):
             self.mean_function, Zero
         ), "Mean functions not implemented for VFE yet."
 
-    def compute_loss(self):
+    def compute_loss(self, x=None, y=None):
         """
         Computes the variational lower bound of the true log marginal likelihood
         Eqn (9) in Titsias, Michalis K. "Variational Learning of Inducing Variables
         in Sparse Gaussian Processes." AISTATS. Vol. 5. 2009.
         """
 
+        x = x if x is not None else self.X
+        y = y if y is not None else self.Y
+        if not x.shape[0] == y.shape[0]:
+            raise ValueError("X and Y must have same # data.")
+
         num_inducing = self.num_inducing
-        num_data = self.num_data
+        num_data = x.shape[0]
         d_out = self.output_dimension
         # TODO: add mean_functions
-        # err = self.Y - self.mean_function(self.X)
+        # err = self.Y - self.mean_function(x)
         err = self.Y
-        Kff_diag = self.kernel.Kdiag(self.X)
-        Kuf = self.kernel.K(self.Z, self.X)
+        Kff_diag = self.kernel.Kdiag(x)
+        Kuf = self.kernel.K(self.Z, x)
         # add jitter
         Kuu = self.kernel.K(self.Z) + self.jitter * torch.eye(
             num_inducing, dtype=torch_dtype
@@ -152,21 +157,23 @@ class VFE(_InducingPointsGP):
 
         return -elbo[0]
 
-    def _predict(self, x_new: TensorType, diag=True):
+    def _predict(self, x_new: TensorType, diag=True, x=None):
         """
         Compute posterior p(f*|y), integrating out induced outputs' posterior.
 
         :return: (mean, var/cov)
         """
 
+        x = x if x is not None else self.X
+
         z = self.Z
         z.requires_grad_(False)
 
         num_inducing = z.size(0)
 
-        # err = self.Y - self.mean_function(self.X)
+        # err = self.Y - self.mean_function(x)
         err = self.Y
-        Kuf = self.kernel.K(z, self.X)
+        Kuf = self.kernel.K(z, x)
         # add jitter
         Kuu = self.kernel.K(z) + self.jitter * torch.eye(
             num_inducing, dtype=torch_dtype
@@ -266,6 +273,9 @@ class SVGP(_InducingPointsGP):
         Variational bound.
         """
 
+        if not x.shape[0] == y.shape[0]:
+            raise ValueError("X and Y must have same # data.")
+
         chol_kuu = cholesky(self.kernel.K(self.Z))
 
         # Marginal posterior q(f)'s mean & variance
@@ -331,7 +341,7 @@ class SVGP(_InducingPointsGP):
 
         return Param(mean), Param(chol_cov, transform=LowerCholeskyTransform())
 
-    def _predict(self, x_new: TensorType, diag=True, chol_kuu=None):
+    def _predict(self, x_new: TensorType, diag=True, chol_kuu=None, **kwargs):
         """
         SVGP Prediction uses inducing points as sufficient statistics for the 
         posterior.

@@ -12,7 +12,7 @@ from gptorch.models.sparse_gpr import VFE, SVGP
 from gptorch.kernels import Matern32
 from gptorch import likelihoods
 from gptorch import mean_functions
-from gptorch.util import torch_dtype
+from gptorch.util import torch_dtype, TensorType
 
 from .common import gaussian_predictions
 
@@ -88,6 +88,15 @@ class TestVFE(_InducingData):
         # Computed while I trust the result.
         assert loss.item() == pytest.approx(8.842242323920674)
 
+        # Test ability to specify x and y
+        loss_xy = model.compute_loss(x=TensorType(x), y=TensorType(y))
+        assert isinstance(loss_xy, torch.Tensor)
+        assert loss_xy.item() == loss.item()
+
+        with pytest.raises(ValueError):
+            # Size mismatch
+            model.compute_loss(x=TensorType(x[:x.shape[0] // 2]))
+
     def test_predict(self):
         """
         Just the ._predict() method
@@ -143,6 +152,15 @@ class TestSVGP(_InducingData):
         assert loss.ndimension() == 0
         # Computed while I trust the result.
         assert loss.item() == pytest.approx(9.534628739243518)
+
+        # Test ability to specify x and y
+        loss_xy = model.compute_loss(x=TensorType(x), y=TensorType(y))
+        assert isinstance(loss_xy, torch.Tensor)
+        assert loss_xy.item() == loss.item()
+
+        with pytest.raises(ValueError):
+            # Size mismatch
+            model.compute_loss(x=TensorType(x[:x.shape[0] // 2]), y=TensorType(y))
 
         model_minibatch = SVGP(x, y, kernel, batch_size=1)
         loss_mb = model_minibatch.compute_loss()

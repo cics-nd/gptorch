@@ -89,10 +89,15 @@ class GPModel(Model):
     def output_dimension(self):
         return self.Y.shape[1]
 
-    def compute_loss(self):
+    def compute_loss(self, x=None, y=None):
         """
         Defines computation graph upon every call - PyTorch
         This function must be implemented by all subclasses.
+
+        :param x: provide the training inputs on which the loss will be computed.
+            If not provided, default to self.X,
+        :param y: provide the training outputs on which the loss will be computed.
+            If not provided, default to self.Y
         """
         raise NotImplementedError
 
@@ -340,23 +345,23 @@ class GPModel(Model):
         raise NotImplementedError()
 
     @input_as_tensor
-    def predict_f(self, input_new, diag=True):
+    def predict_f(self, input_new, diag=True, **kwargs):
         """
         Computes the mean and variance of the latent function at input_new
         return the diagonal of the cov matrix
         Args:
             input_new (numpy.ndarray or torch.Tensor)
         """
-        return self._predict(input_new, diag=diag)
+        return self._predict(input_new, diag=diag, **kwargs)
 
     @input_as_tensor
-    def predict_y(self, input_new, diag=True):
+    def predict_y(self, input_new, diag=True, **kwargs):
         """
         Computes the mean and variance of observations at new inputs
         Args:
             input_new (numpy.ndarray)
         """
-        mean_f, cov_f = self._predict(input_new, diag=diag)
+        mean_f, cov_f = self._predict(input_new, diag=diag, **kwargs)
 
         if diag:
             return self.likelihood.predict_mean_variance(mean_f, cov_f)
@@ -364,27 +369,27 @@ class GPModel(Model):
             return self.likelihood.predict_mean_covariance(mean_f, cov_f)
 
     @input_as_tensor
-    def predict_f_samples(self, input_new, n_samples=1):
+    def predict_f_samples(self, input_new, n_samples=1, **kwargs):
         """
         Return [n_samp x n_test x d_y] matrix of samples
         :param input_new:
         :param n_samples:
         :return:
         """
-        mu, sigma = self.predict_f(input_new, diag=False)
+        mu, sigma = self.predict_f(input_new, diag=False, **kwargs)
         chol_s = cholesky(sigma)
         samp = mu + chol_s[None, :, :] @ torch.randn(n_samples, *mu.shape)
         return samp
 
     @input_as_tensor
-    def predict_y_samples(self, input_new, n_samples=1):
+    def predict_y_samples(self, input_new, n_samples=1, **kwargs):
         """
         Return [n_samp x n_test x d_y] matrix of samples
         :param input_new:
         :param n_samples:
         :return:
         """
-        mu, sigma = self.predict_y(input_new, diag=False)
+        mu, sigma = self.predict_y(input_new, diag=False, **kwargs)
         chol_s = cholesky(sigma)
         samp = mu + chol_s[None, :, :] @ torch.randn(n_samples, *mu.shape)
         return samp

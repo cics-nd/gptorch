@@ -45,40 +45,46 @@ class GPR(GPModel):
         
         super().__init__(x, y, kernel, likelihood, mean_function, name)
 
-    def compute_loss(self):
+    def compute_loss(self, x=None, y=None):
         """
         Loss is equal to the negative of the prior log likelihood
 
         Adapted from Rasmussen & Williams, GPML (2006), p. 19, Algorithm 2.1.
         """
 
-        num_input = self.Y.size(0)
-        dim_output = self.Y.size(1)
+        x = x if x is not None else self.X
+        y = y if y is not None else self.Y
+        if not x.shape[0] == y.shape[0]:
+            raise ValueError("X and Y must have same # data.")
 
-        L = cholesky(self._compute_kyy())
-        alpha = trtrs(self.Y - self.mean_function(self.X), L)
+        num_input, dim_output = y.shape
+
+        L = cholesky(self._compute_kyy(x=x))
+        alpha = trtrs(y - self.mean_function(x), L)
         const = TensorType([-0.5 * dim_output * num_input * np.log(2 * np.pi)])
         loss = 0.5 * alpha.pow(2).sum() + dim_output * lt_log_determinant(L) - const
         return loss
 
-    def _compute_kyy(self):
+    def _compute_kyy(self, x=None):
         """
         Computes the covariance matrix over the training inputs
 
         Returns:
             Ky (torch.Tensor)
         """
-        num_input = self.Y.size(0)
+
+        x = x if x is not None else self.X
+        num_input = x.shape[0]
 
         return (
-            self.kernel.K(self.X)
+            self.kernel.K(x)
             + (self.likelihood.variance.transform())
             .expand(num_input, num_input)
             .diag()
             .diag()
         )
 
-    def _predict(self, x_new: TensorType, diag=True):
+    def _predict(self, x_new: TensorType, diag=True, x=None):
         """
         This method computes
 
@@ -89,11 +95,14 @@ class GPR(GPModel):
         input X of the training data.
         :param x_new: test inputs; should be two-dimensional
         """
-        k_ys = self.kernel.K(self.X, x_new)
 
-        L = cholesky(self._compute_kyy())
+        x = x if x is not None else self.X
+
+        k_ys = self.kernel.K(x, x_new)
+
+        L = cholesky(self._compute_kyy(x=x))
         A = trtrs(k_ys, L)
-        V = trtrs(self.Y - self.mean_function(self.X), L)
+        V = trtrs(self.Y - self.mean_function(x), L)
         mean_f = A.t() @ V + self.mean_function(x_new)
 
         if diag:
