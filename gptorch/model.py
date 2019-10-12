@@ -7,7 +7,7 @@ Basic model and parameter classes for Gaussian Processes, inheriting from
 :class:`torch.nn.Module` and :class:`torch.nn.Parameter` respectively.
 """
 
-from torch.autograd import Variable, gradcheck
+from torch.autograd import gradcheck
 import torch
 import numpy as np
 from time import time
@@ -15,9 +15,7 @@ from warnings import warn
 
 from .functions import cholesky
 from .param import Param
-from .util import torch_dtype
-
-torch.set_default_dtype(torch_dtype)
+from .util import TensorType
 
 
 def _addindent(s_, numSpaces):
@@ -79,7 +77,7 @@ class Model(torch.nn.Module):
                     param_array[idx_current:idx_next], param.data.numpy().shape
                 )
                 idx_current = idx_next
-                param.data = torch.Tensor(param_np)
+                param.data = TensorType(param_np)
 
     def _loss_and_grad(self, param_array):
         """
@@ -141,14 +139,14 @@ class Model(torch.nn.Module):
     def extract_params(self):
         """
         Returns:
-            (Tuple of torch.Tensors)
+            (Tuple of TensorTypes)
         """
         return tuple([x for x in self.parameters()])
 
     def expand_params(self, *args):
         """
         Args:
-            args (tuple of torch.Tensors): (Get from self.extract_params())
+            args (tuple of TensorTypes): (Get from self.extract_params())
         """
         for arg, (param_name, param) in zip(args, self.named_parameters()):
             if isinstance(arg, Param):
@@ -163,7 +161,7 @@ class Model(torch.nn.Module):
         Loss, given args to be expanded into the model.
 
         Args:
-            args (pointer to a tuple of torch.Tensors):
+            args (pointer to a tuple of TensorTypes):
             (Get from self.extract_params())
         """
         self.expand_params(*args)

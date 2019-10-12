@@ -1,9 +1,26 @@
 # gptorch
+[![CircleCI](https://circleci.com/gh/cics-nd/gptorch.svg?style=svg)](https://circleci.com/gh/cics-nd/gptorch)
+[![codecov](https://codecov.io/gh/cics-nd/gptorch/branch/master/graph/badge.svg)](https://codecov.io/gh/cics-nd/gptorch)
+
 Gaussian processes with PyTorch
 
 ## Installation
 
-The simplest way to install is via [Anaconda](https://www.anaconda.com/distribution/) using the provided `environment.yml`:
+### Via pip
+
+```
+$ pip install gptorch
+```
+
+### From source
+
+You can now do:
+```
+$ pip install -r -requirements.txt
+$ python setup.py install
+```
+
+Otherwise, we've provided an `environment.yml` to make a new virtual environment with [Anaconda](https://www.anaconda.com/distribution/):
 
 ```
 $ conda env create -f environment.yml

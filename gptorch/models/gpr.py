@@ -9,7 +9,6 @@ Class for Vanilla GP regression.
 
 import torch
 import numpy as np
-from torch.autograd import Variable
 
 from .. import kernels
 from ..model import Param
@@ -29,11 +28,11 @@ class GPR(GPModel):
         Default likelihood is Gaussain, mean function is zero.
 
         Args:
-            observations (np.ndarray or Variable): a matrix of observed outputs.
+            observations (np.ndarray or TensorType): a matrix of observed outputs.
                 Each datum is a row in the matrix (# rows = # training data,
                 # columns = output dimensionality)
-            input (np.ndarray or Variable): the observed inputs.
-                If input is a numpy matrix or torch Variable, then each datum is
+            input (np.ndarray or TensorType): the observed inputs.
+                If input is a numpy matrix or torch TensorType, then each datum is
                 a row in the matrix (# rows = # training data,
                 # columns = input dimensionality).
             kernel (Kernel): The kernel function for computing the covariance
@@ -70,7 +69,7 @@ class GPR(GPModel):
         Computes the covariance matrix over the training inputs
 
         Returns:
-            Ky (torch.Tensor)
+            Ky (TensorType)
         """
 
         x = x if x is not None else self.X

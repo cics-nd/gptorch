@@ -1,0 +1,45 @@
+# Python CircleCI 2.0 configuration file
+# Check https://circleci.com/docs/2.0/language-python/ for more details
+version: 2
+jobs:
+  build:
+    docker:
+      - image: circleci/python:3.7.4
+
+    working_directory: ~/gptorch
+
+    steps:
+      - checkout
+
+      - restore_cache:
+          keys:
+            - v1-dependencies-{{ checksum "requirements.txt" }}
+            # fallback to using the latest cache if no exact match is found
+            - v1-dependencies-
+
+      - run:
+          name: install dependencies
+          command: |
+            python3 -m venv venv
+            . venv/bin/activate
+            pip install --upgrade pip
+            pip install -r requirements.txt
+            python setup.py install
+      - save_cache:
+          paths:
+            - ./venv
+          key: v1-dependencies-{{ checksum "requirements.txt" }}
+
+      - run:
+          name: Run tests
+          command: |
+            . venv/bin/activate
+            pytest --cov-report html --cov=gptorch test/
+      - store_artifacts:
+          path: htmlcov
+
+      - run:
+          name: Upload coverage report
+          command: |
+            . venv/bin/activate
+            bash <(curl -s https://codecov.io/bash) -t ${CODECOV_TOKEN}
