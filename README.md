@@ -6,7 +6,21 @@ Gaussian processes with PyTorch
 
 ## Installation
 
-The simplest way to install is via [Anaconda](https://www.anaconda.com/distribution/) using the provided `environment.yml`:
+### Via pip
+
+```
+$ pip install gptorch
+```
+
+### From source
+
+You can now do:
+```
+$ pip install -r -requirements.txt
+$ python setup.py install
+```
+
+Otherwise, we've provided an `environment.yml` to make a new virtual environment with [Anaconda](https://www.anaconda.com/distribution/):
 
 ```
 $ conda env create -f environment.yml
