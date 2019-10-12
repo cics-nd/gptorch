@@ -1,6 +1,7 @@
 # gptorch
 [![CircleCI](https://circleci.com/gh/cics-nd/gptorch.svg?style=svg)](https://circleci.com/gh/cics-nd/gptorch)
 [![codecov](https://codecov.io/gh/cics-nd/gptorch/branch/master/graph/badge.svg)](https://codecov.io/gh/cics-nd/gptorch)
+
 Gaussian processes with PyTorch
 
 ## Installation
