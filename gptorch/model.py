@@ -9,7 +9,7 @@ Basic model and parameter classes for Gaussian Processes, inheriting from
 
 from __future__ import absolute_import
 
-from torch.autograd import Variable, gradcheck
+from torch.autograd import gradcheck
 import torch
 from scipy.optimize import minimize
 import numpy as np
@@ -17,21 +17,19 @@ from time import time
 from warnings import warn
 
 from .functions import SoftplusInv, cholesky
-from .util import torch_dtype
-
-torch.set_default_dtype(torch_dtype)
+from .util import TensorType
 
 
 def input_as_tensor(predict_func):
     """
-    Decorator for prediction funtions to ensure that inputs are torch.Tensor
+    Decorator for prediction funtions to ensure that inputs are TensorType
     objects before passing into GPModel._predict() methods.
 
     :param predict_func: The public predict funciton to be wrapped
     """
     def predict(obj, input_new, *args, **kwargs):
         if isinstance(input_new, np.ndarray):
-            input_new = torch.Tensor(input_new)
+            input_new = TensorType(input_new)
         return predict_func(obj, input_new, *args, **kwargs)
     
     return predict
@@ -94,7 +92,7 @@ class Model(torch.nn.Module):
                 idx_next = idx_current + np.prod(param.data.size())
                 param_np = np.reshape(param_array[idx_current: idx_next], param.data.numpy().shape)
                 idx_current = idx_next
-                param.data = torch.Tensor(param_np)
+                param.data = TensorType(param_np)
 
     def _loss_and_grad(self, param_array):
         """
@@ -154,14 +152,14 @@ class Model(torch.nn.Module):
     def extract_params(self):
         """
         Returns:
-            (Tuple of torch.Tensors)
+            (Tuple of TensorTypes)
         """
         return tuple([x for x in self.parameters()])
 
     def expand_params(self, *args):
         """
         Args:
-            args (tuple of torch.Tensors): (Get from self.extract_params())
+            args (tuple of TensorTypes): (Get from self.extract_params())
         """
         for arg, (param_name, param) in zip(args, self.named_parameters()):
             if isinstance(arg, Param):
@@ -175,7 +173,7 @@ class Model(torch.nn.Module):
         Loss, given args to be expanded into the model.
 
         Args:
-            args (pointer to a tuple of torch.Tensors):
+            args (pointer to a tuple of TensorTypes):
             (Get from self.extract_params())
         """
         self.expand_params(*args)
@@ -273,15 +271,15 @@ class GPModel(Model):
         assert mean_function is None, "Mean functions not supported"
         self.mean_function = mean_function
 
-        allowed_data_types = (np.ndarray, torch.Tensor)
+        allowed_data_types = (np.ndarray, TensorType)
         assert type(x) in allowed_data_types, \
             "x must be one of {}".format(allowed_data_types)
         if isinstance(x, np.ndarray):
-            x = torch.Tensor(x)
+            x = TensorType(x)
         assert type(y) in allowed_data_types, \
             "y must be one of {}".format(allowed_data_types)
         if isinstance(y, np.ndarray):
-            y = torch.Tensor(y)
+            y = TensorType(y)
         x.requires_grad_(False)
         y.requires_grad_(False)
         self.X, self.Y = x, y
@@ -463,7 +461,7 @@ class GPModel(Model):
                           options=options)
         return result
 
-    def _predict(self, input_new: torch.Tensor, diag=True):
+    def _predict(self, input_new: TensorType, diag=True):
         # diag: is a flag indicates whether only returns the diagonal of
         # predictive variance at input_new
         # :param input_new: np.ndarray
@@ -505,7 +503,7 @@ class GPModel(Model):
         """
         mu, sigma = self.predict_f(input_new, diag=False)
         chol_s = cholesky(sigma)
-        samp = mu + torch.stack([torch.mm(chol_s, Variable(torch.Tensor(r)))
+        samp = mu + torch.stack([torch.mm(chol_s, TensorType(r))
                               for r in np.random.randn(n_samples, *mu.size())])
         return samp
 
@@ -519,7 +517,7 @@ class GPModel(Model):
         """
         mu, sigma = self.predict_y(input_new, diag=False)
         chol_s = cholesky(sigma)
-        samp = mu + torch.stack([torch.mm(chol_s, Variable(torch.Tensor(r)))
+        samp = mu + torch.stack([torch.mm(chol_s, TensorType(r))
                               for r in np.random.randn(n_samples, *mu.size())])
         return samp
 
