@@ -1,5 +1,7 @@
-Current version on PyPI: 0.2.1
+Current version on PyPI: 0.2.2
 
-# 0.2.2:
-* Remove instances of torch.set_default_dtype() from codebase
-* Add CircleCI and CodeCov.io
+# 0.2.3:
+TBD
+
+# 0.3.0:
+TBD
