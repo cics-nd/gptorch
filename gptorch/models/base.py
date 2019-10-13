@@ -29,9 +29,18 @@ def input_as_tensor(predict_func):
     """
 
     def predict(obj, input_new, *args, **kwargs):
-        if isinstance(input_new, np.ndarray):
+        from_numpy = isinstance(input_new, np.ndarray)
+        if from_numpy:
             input_new = torch.Tensor(input_new)
-        return predict_func(obj, input_new, *args, **kwargs)
+        out = predict_func(obj, input_new, *args, **kwargs)
+        if from_numpy:
+            if isinstance(out, torch.Tensor):
+                out = out.detach().cpu().numpy()
+            elif isinstance(out, tuple):
+                out = tuple([o.detach().cpu().numpy() for o in out])
+            else:
+                raise NotImplementedError("Unhandled output type")
+        return out
 
     return predict
 

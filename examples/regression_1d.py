@@ -52,14 +52,14 @@ if __name__ == "__main__":
     x_test = np.linspace(-1, 2, n_test).reshape((-1, 1))
     with torch.no_grad():
         mu, s = model.predict_y(x_test)
-        mu, s = mu.numpy().flatten(), s.numpy().flatten()
-        y_samp = model.predict_y_samples(x_test, n_samples=n_samples).numpy()
+        y_samp = model.predict_y_samples(x_test, n_samples=n_samples)
     unc = 2.0 * np.sqrt(s)
 
     # Show prediction
     x_test = x_test.flatten()
     plt.figure()
-    plt.fill_between(x_test, mu - unc, mu + unc, color=(0.9,) * 3)
+    plt.fill_between(x_test, (mu - unc).flatten(), (mu + unc).flatten(), 
+        color=(0.9,) * 3)
     plt.plot(x_test, mu)
     plt.plot(x_test, f(x_test))
     for y_samp_i in y_samp:

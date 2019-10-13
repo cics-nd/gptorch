@@ -8,6 +8,8 @@ TBD
 ## Changes brekaing backward compatibility:
 * GPR, VFE, SVGP: training inputs order is changed from (y, x) to (x, y) on 
     model __init__()s.
+* `.predict()` functions return the same type as the inputs provided 
+    (numpy.ndarray->numpy.ndarray, torch.Tensor->torch.Tensor)
 
 ## Changes not breaking backward compatibility
 * GPR, VFE: Allow specifying training set on .compute_loss() with x, y kwargs
