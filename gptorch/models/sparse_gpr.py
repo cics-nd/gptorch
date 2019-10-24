@@ -17,7 +17,6 @@ from ..functions import cholesky, trtrs
 from ..mean_functions import Zero
 from ..likelihoods import Gaussian
 from ..util import TensorType, torch_dtype, as_tensor, kmeans_centers
-from ..util import KL_Gaussian
 from .gpr import GPR
 from .base import GPModel
 
