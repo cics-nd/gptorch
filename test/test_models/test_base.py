@@ -18,6 +18,24 @@ class TestGPModel(object):
     Tests for the GPModel class
     """
 
+    def test_cuda(self):
+        gp = self._get_model()
+
+        gp.cuda()
+        # Ensure that the data made it too
+        assert gp.X.is_cuda
+        assert gp.Y.is_cuda
+
+    def test_cpu(self):
+        gp = self._get_model()
+
+        gp.cuda()
+        gp.cpu()
+
+        # Ensure that the data made it too
+        assert not gp.X.is_cuda
+        assert not gp.Y.is_cuda
+
     def test_predict_f(self):
         self._predict_fy("predict_f")
 
@@ -86,3 +104,10 @@ class TestGPModel(object):
         assert isinstance(samples_torch, TensorType)
         assert samples_torch.ndimension() == 3  # [1 x n_test x dy]
         assert samples_torch.shape == (1, n_test, dy)
+
+    @staticmethod
+    def _get_model():
+        n, dx, dy = 5, 3, 2
+        x, y = np.random.randn(n, dx), np.random.randn(n, dy)
+        kern = Rbf(dx, ARD=True)
+        return GPR(x, y, kern)
