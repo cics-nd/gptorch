@@ -14,8 +14,7 @@ torch_dtype = torch.double
 
 def as_tensor(x):
     """
-    Convert a numpy matrix into a raw Tensor.
-    If you're unsure, use as_variable() instead.
+    Convert a numpy matrix into a Tensor.
 
     Args:
         x (np.ndarray)
