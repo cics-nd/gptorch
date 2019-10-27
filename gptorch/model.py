@@ -60,7 +60,7 @@ class Model(torch.nn.Module):
         param_array = []
         for param in self.parameters():
             if param.requires_grad:
-                param_array.append(param.data.numpy().flatten())
+                param_array.append(param.detach().cpu().numpy().flatten())
 
         return np.concatenate(param_array)
 
@@ -72,12 +72,14 @@ class Model(torch.nn.Module):
         idx_current = 0
         for param in self.parameters():
             if param.requires_grad:
-                idx_next = idx_current + np.prod(param.data.size())
-                param_np = np.reshape(
-                    param_array[idx_current:idx_next], param.data.numpy().shape
+                idx_next = idx_current + param.numel()
+                param_in = TensorType(
+                    np.reshape(param_array[idx_current:idx_next], param.shape)
                 )
+                if param.is_cuda:
+                    param_in = param_in.cuda()
+                param.data = param_in
                 idx_current = idx_next
-                param.data = TensorType(param_np)
 
     def _loss_and_grad(self, param_array):
         """
@@ -115,21 +117,18 @@ class Model(torch.nn.Module):
         grad = []
         for name, param in self.named_parameters():
             if param.requires_grad:
-                grad.append(param.grad.data.numpy().flatten())
-            # if name in ['Z']:
-            #     print('Z: %s' % param.data)
-            #     print('grad of Z: %s' % param.grad)
-        print("loss: %s" % loss.data.numpy())
+                grad.append(param.grad.cpu().numpy().flatten())
+        print("loss: %s" % loss.item())
         grad = np.concatenate(grad)
         grad_isfinite = np.isfinite(grad)
         ## scipy.optimizer.minimize.L-BFGS-B expects double precision (Fortran)
         if np.all(grad_isfinite):
-            return loss.data.numpy().astype(np.float64), grad.astype(np.float64)
+            return float(loss.item()), grad.astype(np.float64)
         else:
             # self._previous_x = x  # store the last known good value
             print("Warning: inf or nan in gradient: replacing with zeros")
             return (
-                loss.data.numpy().astype(np.float64),
+                loss.item().astype(np.float64),
                 np.where(grad_isfinite, grad, 0.0).astype(np.float64),
             )
 
