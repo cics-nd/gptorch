@@ -61,7 +61,6 @@ class _InducingPointsGP(GPModel):
                 perturb_if_fail=True)
             # indices = np.random.permutation(len(x))[:num_inducing_points]
             # inducing_points = TensorType(x[indices])
-            print("Inducing points:\n{}".format(inducing_points))
 
         # Z stands for inducing input points as standard in the literature
         self.Z = Param(as_tensor(inducing_points))
