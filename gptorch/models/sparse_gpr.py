@@ -65,7 +65,6 @@ class _InducingPointsGP(GPModel):
 
         # Z stands for inducing input points as standard in the literature
         self.Z = Param(as_tensor(inducing_points))
-        self.jitter = 1.0e-6
 
     @property
     def num_inducing(self) -> int:
@@ -128,20 +127,18 @@ class VFE(_InducingPointsGP):
         Kff_diag = self.kernel.Kdiag(x)
         Kuf = self.kernel.K(self.Z, x)
         # add jitter
-        Kuu = self.kernel.K(self.Z) + self.jitter * torch.eye(
-            num_inducing, dtype=torch_dtype
-        )
+        Kuu = self.kernel.K(self.Z)
         L = cholesky(Kuu)
 
         A = trtrs(Kuf, L)
         AAT = A @ A.t() / self.likelihood.variance.transform().expand_as(Kuu)
-        B = AAT + torch.eye(num_inducing, dtype=torch_dtype)
+        B = AAT + torch.eye(num_inducing, dtype=torch_dtype).to(AAT.device)
         LB = cholesky(B)
         # divide variance at the end
         c = trtrs(A @ err, LB) / self.likelihood.variance.transform()
 
         # Evidence lower bound
-        elbo = TensorType([-0.5 * d_out * num_data * np.log(2 * np.pi)])
+        elbo = TensorType([-0.5 * d_out * num_data * np.log(2 * np.pi)]).to(c.device)
         elbo -= d_out * LB.diag().log().sum()
         elbo -= (
             0.5 * d_out * num_data * self.likelihood.variance.transform().log()
@@ -174,14 +171,12 @@ class VFE(_InducingPointsGP):
         err = self.Y
         Kuf = self.kernel.K(z, x)
         # add jitter
-        Kuu = self.kernel.K(z) + self.jitter * torch.eye(
-            num_inducing, dtype=torch_dtype
-        )
+        Kuu = self.kernel.K(z)
         Kus = self.kernel.K(z, x_new)
         L = cholesky(Kuu)
         A = trtrs(Kuf, L)
         AAT = A @ A.t() / self.likelihood.variance.transform().expand_as(Kuu)
-        B = AAT + torch.eye(num_inducing, dtype=torch_dtype)
+        B = AAT + torch.eye(num_inducing, dtype=torch_dtype).to(AAT.device)
         LB = cholesky(B)
         # divide variance at the end
         c = trtrs(A @ err, LB) / self.likelihood.variance.transform()

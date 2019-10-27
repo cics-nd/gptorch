@@ -196,14 +196,15 @@ class Matern12(Exp):
 
 class Matern32(Stationary):
     def K(self, X, X2=None):
-        r3 = TensorType([np.sqrt(3.0)]) * self.dist(X, X2)
+        r = self.dist(X, X2)
+        r3 = TensorType([np.sqrt(3.0)]).to(r.device) * r
         return self.variance.transform() * (1.0 + r3) * torch.exp(-r3)
 
 
 class Matern52(Stationary):
     def K(self, X, X2=None):
         r = self.dist(X, X2)
-        s5 = TensorType([np.sqrt(5.0)])
+        s5 = TensorType([np.sqrt(5.0)]).to(r.device)
         return (
             self.variance.transform()
             * (1.0 + s5 * r + 5.0 / 3.0 * r * r)

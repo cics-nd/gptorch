@@ -127,6 +127,7 @@ class Gaussian(Likelihood):
         sigma_y = self.variance.transform()
 
         return -0.5 * (
-            n * (torch.log(torch.Tensor([2.0 * pi])) + torch.log(sigma_y))
+            n * (torch.log(torch.Tensor([2.0 * pi])).to(sigma_y.device) 
+            + torch.log(sigma_y))
             + (torch.sum((targets - mu) ** 2) + s.sum()) / sigma_y
         )

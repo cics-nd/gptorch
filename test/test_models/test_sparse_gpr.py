@@ -3,6 +3,7 @@
 # Author: Steven Atkinson (steven@atkinson.mn)
 
 import os
+import sys
 
 import pytest
 import numpy as np
@@ -16,10 +17,14 @@ from gptorch.util import torch_dtype, TensorType
 
 from .common import gaussian_predictions
 
-torch.set_default_dtype(torch_dtype)
-
 _data_dir = os.path.join(os.path.dirname(__file__), "..", "data", "models", 
     "sparse_gpr")
+
+base_path = os.path.join(os.path.dirname(__file__), "..", "..")
+if not base_path in sys.path:
+    sys.path.append(base_path)
+
+from test.util import needs_cuda
 
 
 def atleast_col(func):
@@ -76,8 +81,8 @@ class TestVFE(_InducingData):
         x, y = _InducingData._xy()
         z = _InducingData._z()
         kernel = Matern32(1)
-        kernel.length_scales.data = torch.zeros(1)
-        kernel.variance.data = torch.zeros(1)
+        kernel.length_scales.data = torch.zeros(1, dtype=torch_dtype)
+        kernel.variance.data = torch.zeros(1, dtype=torch_dtype)
         likelihood = likelihoods.Gaussian(variance=1.0)
 
         model = VFE(x, y, kernel, inducing_points=z, likelihood=likelihood,
@@ -97,6 +102,13 @@ class TestVFE(_InducingData):
             # Size mismatch
             model.compute_loss(x=TensorType(x[:x.shape[0] // 2]))
 
+    @needs_cuda
+    def test_compute_loss_cuda(self):
+        model = self._get_model()
+        model.cuda()
+        loss = model.compute_loss()
+        assert loss.is_cuda
+
     def test_predict(self):
         """
         Just the ._predict() method
@@ -105,8 +117,8 @@ class TestVFE(_InducingData):
         x, y = _InducingData._xy()
         z = _InducingData._z()
         kernel = Matern32(1)
-        kernel.length_scales.data = torch.zeros(1)
-        kernel.variance.data = torch.zeros(1)
+        kernel.length_scales.data = torch.zeros(1, dtype=torch_dtype)
+        kernel.variance.data = torch.zeros(1, dtype=torch_dtype)
         likelihood = likelihoods.Gaussian(variance=1.0)
 
         model = VFE(x, y, kernel, inducing_points=z, likelihood=likelihood,
@@ -116,10 +128,33 @@ class TestVFE(_InducingData):
         mu, s = TestVFE._y_pred()
         gaussian_predictions(model, x_test, mu, s)
 
+    @needs_cuda
+    def test_predict_cuda(self):
+        model = self._get_model()
+        model.cuda()
+
+        x_test = torch.randn(4, model.input_dimension, dtype=torch_dtype).cuda()
+        for t in model._predict(x_test):
+            assert t.is_cuda
+
     @staticmethod
     @atleast_col
     def _y_pred():
         return _get_matrix("vfe_y_mean"),  _get_matrix("vfe_y_cov")  
+
+    @staticmethod
+    def _get_model():
+        x, y = _InducingData._xy()
+        z = _InducingData._z()
+        kernel = Matern32(1)
+        kernel.length_scales.data = torch.zeros(1, dtype=torch_dtype)
+        kernel.variance.data = torch.zeros(1, dtype=torch_dtype)
+        likelihood = likelihoods.Gaussian(variance=1.0)
+
+        model = VFE(x, y, kernel, inducing_points=z, likelihood=likelihood,
+            mean_function=mean_functions.Zero(1))
+
+        return model
 
 
 class TestSVGP(_InducingData):
@@ -137,15 +172,15 @@ class TestSVGP(_InducingData):
         z = _InducingData._z()
         u_mu, u_l_s = TestSVGP._induced_outputs()
         kernel = Matern32(1)
-        kernel.length_scales.data = torch.zeros(1)
-        kernel.variance.data = torch.zeros(1)
+        kernel.length_scales.data = torch.zeros(1, dtype=torch_dtype)
+        kernel.variance.data = torch.zeros(1, dtype=torch_dtype)
         likelihood = likelihoods.Gaussian(variance=1.0)
 
         model = SVGP(x, y, kernel, inducing_points=z, likelihood=likelihood,
             mean_function=mean_functions.Zero(1))
-        model.induced_output_mean.data = torch.Tensor(u_mu)
+        model.induced_output_mean.data = TensorType(u_mu)
         model.induced_output_chol_cov.data = model.induced_output_chol_cov.\
-            _transform.inv(torch.Tensor(u_l_s))
+            _transform.inv(TensorType(u_l_s))
 
         loss = model.compute_loss()
         assert isinstance(loss, torch.Tensor)
@@ -169,15 +204,23 @@ class TestSVGP(_InducingData):
 
         model_full_mb = SVGP(x, y, kernel, inducing_points=z, likelihood=likelihood,
             mean_function=mean_functions.Zero(1), batch_size=x.shape[0])
-        model_full_mb.induced_output_mean.data = torch.Tensor(u_mu)
+        model_full_mb.induced_output_mean.data = TensorType(u_mu)
         model_full_mb.induced_output_chol_cov.data = model_full_mb.induced_output_chol_cov.\
-            _transform.inv(torch.Tensor(u_l_s))
+            _transform.inv(TensorType(u_l_s))
         loss_full_mb = model_full_mb.compute_loss()
         assert isinstance(loss_full_mb, torch.Tensor)
         assert loss_full_mb.ndimension() == 0
         assert loss_full_mb.item() == pytest.approx(loss.item())
 
         model.compute_loss(model.X, model.Y)  # Just make sure it works!
+
+    @needs_cuda
+    def test_compute_loss_cuda(self):
+        model = self._get_model()
+        model.cuda()
+
+        loss = model.compute_loss()
+        assert loss.is_cuda
 
     def test_predict(self):
         """
@@ -188,19 +231,28 @@ class TestSVGP(_InducingData):
         z = _InducingData._z()
         u_mu, u_l_s = TestSVGP._induced_outputs()
         kernel = Matern32(1)
-        kernel.length_scales.data = torch.zeros(1)
-        kernel.variance.data = torch.zeros(1)
+        kernel.length_scales.data = torch.zeros(1, dtype=torch_dtype)
+        kernel.variance.data = torch.zeros(1, dtype=torch_dtype)
         likelihood = likelihoods.Gaussian(variance=1.0)
 
         model = SVGP(x, y, kernel, inducing_points=z, likelihood=likelihood,
             mean_function=mean_functions.Zero(1))
-        model.induced_output_mean.data = torch.Tensor(u_mu)
+        model.induced_output_mean.data = TensorType(u_mu)
         model.induced_output_chol_cov.data = model.induced_output_chol_cov.\
-            _transform.inv(torch.Tensor(u_l_s))
+            _transform.inv(TensorType(u_l_s))
 
-        x_test = torch.Tensor(_InducingData._x_test())
+        x_test = TensorType(_InducingData._x_test())
         mu, s = TestSVGP._y_pred()
         gaussian_predictions(model, x_test, mu, s)
+
+    @needs_cuda
+    def test_predict_cuda(self):
+        model = self._get_model()
+        model.cuda()
+
+        x_test = torch.randn(4, model.input_dimension, dtype=torch_dtype).cuda()
+        for t in model._predict(x_test):
+            assert t.is_cuda
 
     @staticmethod
     @atleast_col
@@ -211,3 +263,21 @@ class TestSVGP(_InducingData):
     @atleast_col
     def _y_pred():
         return _get_matrix("svgp_y_mean"), _get_matrix("svgp_y_cov")
+
+    @staticmethod
+    def _get_model():
+        x, y = _InducingData._xy()
+        z = _InducingData._z()
+        u_mu, u_l_s = TestSVGP._induced_outputs()
+        kernel = Matern32(1)
+        kernel.length_scales.data = torch.zeros(1, dtype=torch_dtype)
+        kernel.variance.data = torch.zeros(1, dtype=torch_dtype)
+        likelihood = likelihoods.Gaussian(variance=1.0)
+
+        model = SVGP(x, y, kernel, inducing_points=z, likelihood=likelihood,
+            mean_function=mean_functions.Zero(1))
+        model.induced_output_mean.data = TensorType(u_mu)
+        model.induced_output_chol_cov.data = model.induced_output_chol_cov.\
+            _transform.inv(TensorType(u_l_s))
+        
+        return model
