@@ -6,15 +6,18 @@
 Demonstration of GPs for regression
 """
 
-import os, sys
+import os
+import sys
+from time import time
 
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 import torch
 import matplotlib.pyplot as plt
 import numpy as np
 
+sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+
 from gptorch.models.gpr import GPR
-from gptorch.models.sparse_gpr import VFE
+from gptorch.models.sparse_gpr import VFE, SVGP
 from gptorch import kernels
 from gptorch.util import TensorType
 from gptorch import mean_functions
@@ -40,6 +43,7 @@ if __name__ == "__main__":
     # Try different models:
     model = GPR(x, y, kern)
     # model = VFE(x, y, kern)
+    # model.cuda()  # If you want to use GPU
 
     # Train
     model.optimize(method="L-BFGS-B", max_iter=100)
@@ -67,6 +71,8 @@ if __name__ == "__main__":
     plt.plot(x, y, "o")
     if hasattr(model, "Z"):
         plt.plot(
-            model.Z.data.numpy(), 1.0 + plt.ylim()[0] * np.ones(model.Z.shape[0]), "+"
+            model.Z.detach().cpu().numpy(), 
+            1.0 + plt.ylim()[0] * np.ones(model.Z.shape[0]), 
+            "+"
         )
     plt.show()
