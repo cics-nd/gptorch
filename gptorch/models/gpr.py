@@ -61,6 +61,8 @@ class GPR(GPModel):
         L = cholesky(self._compute_kyy(x=x))
         alpha = trtrs(y - self.mean_function(x), L)
         const = TensorType([-0.5 * dim_output * num_input * np.log(2 * np.pi)])
+        if alpha.is_cuda:
+            const = const.cuda()  # TODO cache this?
         loss = 0.5 * alpha.pow(2).sum() + dim_output * lt_log_determinant(L) - const
         return loss
 
