@@ -21,4 +21,6 @@ Current version on PyPI: 0.2.2
 ## Changes not breaking backward compatibility
 * GPR, VFE: Allow specifying training set on .compute_loss() with x, y kwargs
 * GPR, VFE: Allow specifying training inputs on ._predict() with x kwarg
-* [In progress] GPU supported with typical PyTorch-style commands.
+* GPU supported with .cuda()
+* [TODO] Eliminate GPModel.evaluate()
+* Don't print inducing inputs on sparse GP initialization
