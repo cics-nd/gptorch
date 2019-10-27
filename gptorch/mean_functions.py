@@ -32,7 +32,13 @@ class Constant(torch.nn.Module):
         self.val = torch.nn.Parameter(val)
 
     def forward(self, x):
-        return torch.zeros(x.shape[0], self._dy) + self.val
+        output = torch.zeros(x.shape[0], self._dy)
+        if self._is_cuda():
+            output = output.cuda()
+        return output + self.val
+
+    def _is_cuda(self):
+        return self.val.is_cuda
 
 
 class Zero(Constant):
