@@ -74,6 +74,21 @@ class TestGPModel(object):
             assert result.ndimension() == 2  # [n_test x dy]
             assert result.shape == (n_test, dy)
 
+        # Test that CUDA works in all cases:
+        gp.cuda()
+        # Numpy input:
+        cuda_np = f(x_test)
+        for result in cuda_np:
+            assert isinstance(result, np.ndarray)
+        # PyTorch (cpu) input
+        cuda_torch = f(x_test_torch)
+        for result in cuda_torch:
+            assert result.device == x_test_torch.device
+        # PyTorch (GPU) input
+        cuda_gpu = f(x_test_torch.to("cuda"))
+        for result in cuda_gpu:
+            assert result.is_cuda
+
     def _predict_fy_samples(self, attr):
         """
         attr="predict_f_samples" or "predict_y_samples"
@@ -104,6 +119,18 @@ class TestGPModel(object):
         assert isinstance(samples_torch, TensorType)
         assert samples_torch.ndimension() == 3  # [1 x n_test x dy]
         assert samples_torch.shape == (1, n_test, dy)
+
+        # Test that CUDA works in all cases:
+        gp.cuda()
+        # Numpy input:
+        samples_cuda_np = f(x_test)
+        assert isinstance(samples_cuda_np, np.ndarray)
+        # PyTorch (cpu) input
+        samples_cuda_torch = f(x_test_torch)
+        assert samples_cuda_torch.device == x_test_torch.device
+        # PyTorch (GPU) input
+        samples_cuda_gpu = f(x_test_torch.to("cuda"))
+        assert samples_cuda_gpu.is_cuda
 
     @staticmethod
     def _get_model():

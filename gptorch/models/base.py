@@ -15,15 +15,13 @@ from .. import likelihoods
 from ..functions import cholesky
 from ..mean_functions import Zero
 from ..model import Model
-from ..util import torch_dtype
-
-torch.set_default_dtype(torch_dtype)
+from ..util import TensorType, as_tensor, torch_dtype
 
 
 def input_as_tensor(predict_func):
     """
-    Decorator for prediction funtions to ensure that inputs are torch.Tensor
-    objects before passing into GPModel._predict() methods.
+    Decorator for prediction funtions to ensure that inputs are TensorType and
+    on the correct device before passing into GPModel._predict() methods.
 
     :param predict_func: The public predict funciton to be wrapped
     """
@@ -31,7 +29,12 @@ def input_as_tensor(predict_func):
     def predict(obj, input_new, *args, **kwargs):
         from_numpy = isinstance(input_new, np.ndarray)
         if from_numpy:
-            input_new = torch.Tensor(input_new)
+            input_new = TensorType(input_new)
+            input_new = input_new.to(obj.Y.device)  # Assume single GPU
+        else:
+            # Ensure we match device:
+            outside_device = input_new.device
+            input_new = input_new.to(obj.Y.device)
         out = predict_func(obj, input_new, *args, **kwargs)
         if from_numpy:
             if isinstance(out, torch.Tensor):
@@ -39,7 +42,14 @@ def input_as_tensor(predict_func):
             elif isinstance(out, tuple):
                 out = tuple([o.detach().cpu().numpy() for o in out])
             else:
-                raise NotImplementedError("Unhandled output type")
+                raise NotImplementedError("Unhandled output type {}".format(type(out)))
+        else:
+            if isinstance(out, torch.Tensor):
+                out = out.to(outside_device)
+            elif isinstance(out, tuple):
+                out = tuple([o.to(outside_device) for o in out])
+            else:
+                raise NotImplementedError("Unhandled output type {}".format(type(out)))
         return out
 
     return predict
@@ -69,17 +79,7 @@ class GPModel(Model):
         self.mean_function = mean_function if mean_function is not None else \
             Zero(y.shape[1])
 
-        allowed_data_types = (np.ndarray, torch.Tensor)
-        assert type(x) in allowed_data_types, "x must be one of {}".format(
-            allowed_data_types
-        )
-        if isinstance(x, np.ndarray):
-            x = torch.Tensor(x)
-        assert type(y) in allowed_data_types, "y must be one of {}".format(
-            allowed_data_types
-        )
-        if isinstance(y, np.ndarray):
-            y = torch.Tensor(y)
+        x, y = as_tensor(x), as_tensor(y)
         x.requires_grad_(False)
         y.requires_grad_(False)
         self.X, self.Y = x, y
@@ -122,7 +122,7 @@ class GPModel(Model):
         A handy heuristic for initializing Gaussian likelihoods for models: make
         the standard deviation roughly 3% of the total output variance.
 
-        :param y: Outputs.  Can be either torch.Tensor or np.ndarray
+        :param y: Outputs.  Can be either TensorType or np.ndarray
         """
         return likelihoods.Gaussian(variance=0.001 * y.var())
 
@@ -337,7 +337,7 @@ class GPModel(Model):
         )
         return result
 
-    def _predict(self, input_new: torch.Tensor, diag=True):
+    def _predict(self, input_new: TensorType, diag=True):
         """
         Predict hte latent output function at input_new.
 
@@ -346,7 +346,7 @@ class GPModel(Model):
         If diag=False, then we predict the full covariance [n x n]; the mean is 
         the same.
 
-        :return: (torch.Tensor, torch.Tensor)
+        :return: (TensorType, TensorType)
         """
         # diag: is a flag indicates whether only returns the diagonal of
         # predictive variance at input_new
@@ -359,7 +359,7 @@ class GPModel(Model):
         Computes the mean and variance of the latent function at input_new
         return the diagonal of the cov matrix
         Args:
-            input_new (numpy.ndarray or torch.Tensor)
+            input_new (numpy.ndarray or TensorType)
         """
         return self._predict(input_new, diag=diag, **kwargs)
 
@@ -387,7 +387,9 @@ class GPModel(Model):
         """
         mu, sigma = self.predict_f(input_new, diag=False, **kwargs)
         chol_s = cholesky(sigma)
-        samp = mu + chol_s[None, :, :] @ torch.randn(n_samples, *mu.shape)
+        samp = mu + chol_s[None, :, :] @ torch.randn(
+            n_samples, *mu.shape, dtype=torch_dtype, device=chol_s.device
+        )
         return samp
 
     @input_as_tensor
@@ -400,7 +402,9 @@ class GPModel(Model):
         """
         mu, sigma = self.predict_y(input_new, diag=False, **kwargs)
         chol_s = cholesky(sigma)
-        samp = mu + chol_s[None, :, :] @ torch.randn(n_samples, *mu.shape)
+        samp = mu + chol_s[None, :, :] @ torch.randn(
+            n_samples, *mu.shape, dtype=torch_dtype, device=chol_s.device
+        )
         return samp
 
     # TODO: need more thought on this interface
@@ -451,3 +455,30 @@ class GPModel(Model):
                 "No such metric are supported currently, "
                 + "select one of the following: SMSE, RSME, MSLL, NLML."
             )
+
+    def cuda(self):
+        """
+        Since a GP model "is" its data, we need to make sure that the data make
+        it to the GPU when we do model.cuda()
+        """
+
+        super().cuda()
+        self._data_to_cuda()
+
+    def cpu(self):
+        """
+        Since a GP model "is" its data, we need to make sure that the data make
+        it to the CPU when we do model.cpu()
+        """
+
+        super().cpu()
+        self._data_to_cpu()
+
+    def _data_to_cpu(self):
+        self.X = self.X.cpu()
+        self.Y = self.Y.cpu()
+
+    def _data_to_cuda(self):
+        self.X = self.X.cuda() 
+        self.Y = self.Y.cuda()
+    
