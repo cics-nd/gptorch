@@ -258,8 +258,8 @@ class GPModel(Model):
                     # backward
                     loss.backward()
                     self.optimizer.step()
-                    losses[idx] = loss.data.numpy()
-                    print("Iter: %d\tLoss: %s" % (idx, loss.data.numpy()))
+                    losses[idx] = loss.item()
+                    print("Iter: %d\tLoss: %s" % (idx, loss.item()))
 
             else:
                 for idx in range(max_iter):
@@ -271,8 +271,8 @@ class GPModel(Model):
                         return loss
 
                     loss = self.optimizer.step(closure)
-                    losses[idx] = loss.data.numpy()
-                    print("Iter: %d\tLoss: %s" % (idx, loss.data.numpy()))
+                    losses[idx] = loss.item()
+                    print("Iter: %d\tLoss: %s" % (idx, loss.item()))
         else:
             if not method == "LBFGS":
                 for idx in range(max_iter):
@@ -282,9 +282,9 @@ class GPModel(Model):
                     # backward
                     loss.backward()
                     self.optimizer.step()
-                    losses[idx] = loss.data.numpy()
+                    losses[idx] = loss.item()
                     if idx % 20 == 0:
-                        print("Iter: %d\tLoss: %s" % (idx, loss.data.numpy()))
+                        print("Iter: %d\tLoss: %s" % (idx, loss.item()))
             else:
                 for idx in range(max_iter):
 
@@ -300,7 +300,7 @@ class GPModel(Model):
                         losses = losses[0 : idx + 1]
                         break
                     else:
-                        losses[idx] = loss.data.numpy()
+                        losses[idx] = loss.item()
                     if idx % 20 == 0:
                         print("Iter: %d\tLoss: %s" % (idx, losses[idx]))
         t = time() - tic
