@@ -50,8 +50,16 @@ class TestGPModel(object):
     def test_predict_f(self):
         self._predict_fy("predict_f")
 
+    @needs_cuda
+    def test_predict_f_cuda(self):
+        self._predict_fy_cuda("predict_f")
+
     def test_predict_y(self):
         self._predict_fy("predict_y")
+
+    @needs_cuda
+    def test_predict_y_cuda(self):
+        self._predict_fy_cuda("predict_y")
 
     def test_predict_f_samples(self):
         self._predict_fy_samples("predict_f_samples")
@@ -92,6 +100,15 @@ class TestGPModel(object):
             assert isinstance(result, TensorType)
             assert result.ndimension() == 2  # [n_test x dy]
             assert result.shape == (n_test, dy)
+
+    def _predict_fy_cuda(self, attr):
+        """
+        attr='predict_f' or 'predict_y'
+        """
+
+        gp = self._get_model()
+        x_test = np.random.randn(5, gp.input_dimension)
+        x_test_torch = TensorType(x_test)
 
         # Test that CUDA works in all cases:
         gp.cuda()
