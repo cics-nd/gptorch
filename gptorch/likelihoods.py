@@ -13,6 +13,8 @@ import torch as th
 # from functions import SoftplusInv
 # from torch.nn import functional as F
 
+from .util import TensorType
+
 float_type = th.DoubleTensor
 
 
@@ -30,9 +32,12 @@ class Likelihood(Model):
         p(y) = \int p(y | f) p(f) df
 
         Gauss-Hermite quadrature is used for numerical integration.
+
         :param mean_f: mean of latent functions
+        :type mean_f: TensorType
         :param var_f: variance of the latent functions
-        :return: mean and variance of the observations
+        :type var_f: TensorType
+        :return: (TensorType, TensorType) mean and variance of the observations
         """
         # TODO: Gauss-Hermite quadrature
         raise NotImplementedError
