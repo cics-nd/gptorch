@@ -177,7 +177,7 @@ class Exp(Stationary):
     """
     Exponential Kernel
 
-    k(x, y; variance, length_scale) = variance * exp(-|x-y| / length_scale)
+    k(x, y; variance, length_scale) = variance * exp(-\|x-y\| / length_scale)
     """
     def K(self, X, X2=None):
         return self.variance.transform() * th.exp(-self.dist(X, X2))
