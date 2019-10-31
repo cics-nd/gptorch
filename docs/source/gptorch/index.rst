@@ -11,3 +11,4 @@ gptorch API
     mean_functions
     model
     util
+    models/index
