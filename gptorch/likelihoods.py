@@ -1,7 +1,15 @@
-#
-# Apr 17, 2017    Yinhao Zhu
-#
-# class for likelihoods: p(y | f)
+
+"""
+Likelihood classes
+
+Objects that propagate either points of distributions through a transformation
+yielding a (likelihood) distribution to be evaluated at observed targets 
+(outputs) to guide Bayesian inference.
+
+We also desire to be able to compute expectations of log-densities marginalizing 
+over input distributions (i.e. "marginal log-likelihoods") as typically occur in
+variational inference.
+"""
 
 import abc
 from math import pi
@@ -14,7 +22,7 @@ from .model import Model, Param
 from .settings import DefaultPositiveTransform
 from .util import torch_dtype
 
-torch.set_default_dtype(torch_dtype)
+from .util import TensorType
 
 
 class Likelihood(Model):
@@ -45,9 +53,12 @@ class Likelihood(Model):
         p(y) = \int p(y | f) p(f) df
 
         Gauss-Hermite quadrature is used for numerical integration.
+
         :param mean_f: mean of latent functions
+        :type mean_f: TensorType
         :param var_f: variance of the latent functions
-        :return: mean and variance of the observations
+        :type var_f: TensorType
+        :return: (TensorType, TensorType) mean and variance of the observations
         """
         # TODO: Gauss-Hermite quadrature
         raise NotImplementedError
@@ -75,7 +86,7 @@ class Gaussian(Likelihood):
     def __init__(self, variance=1.0):
         super(Gaussian, self).__init__()
         self.variance = Param(
-            torch.Tensor([variance]), transform=DefaultPositiveTransform()
+            TensorType([variance]), transform=DefaultPositiveTransform()
         )
 
     def logp(self, F, Y):
@@ -84,9 +95,9 @@ class Gaussian(Likelihood):
         centered at F.
 
         :param F: Center of the density
-        :type F: torch.autograd.Variable
+        :type F: TensorType
         :param Y: Targets where we want to compute the log-pdf
-        :type Y: torch.autograd.Variable
+        :type Y: TensorType
         """
         return distributions.Normal(F, torch.sqrt(self.variance.transform())).log_prob(
             Y
@@ -98,11 +109,11 @@ class Gaussian(Likelihood):
         likelihood density
 
         :param mean_f: Mean of input Gaussian
-        :type mean_f: torch.autograd.Variable
+        :type mean_f: TensorType
         :param var_f: Variance of input Gaussian
-        :type var_f: torch.autograd.Variable
+        :type var_f: TensorType
 
-        :return: (torch.autograd.Variable, torch.autograd.Variable) mean & var
+        :return: (TensorType, TensorType) mean & variance
         """
         # TODO: consider mulit-output case
         # stupid syntax - expecting broadcasting in PyTorch
@@ -127,7 +138,7 @@ class Gaussian(Likelihood):
         sigma_y = self.variance.transform()
 
         return -0.5 * (
-            n * (torch.log(torch.Tensor([2.0 * pi])).to(sigma_y.device) 
+            n * (torch.log(TensorType([2.0 * pi])).to(sigma_y.device) 
             + torch.log(sigma_y))
             + (torch.sum((targets - mu) ** 2) + s.sum()) / sigma_y
         )

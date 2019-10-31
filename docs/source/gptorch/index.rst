@@ -6,4 +6,9 @@ gptorch API
 .. toctree:: 
     :maxdepth: 1
 
-    kernels.rst
+    kernels
+    likelihoods
+    mean_functions
+    model
+    util
+    models/index
