@@ -8,11 +8,10 @@
 # Transpose
 # Shift (Stationary only)
 
-from unittest import TestCase
+import os
+
 import pytest
 import numpy as np
-from torch.autograd import Variable
-import os
 
 from gptorch import kernels
 from gptorch.util import TensorType
@@ -20,25 +19,22 @@ from gptorch.util import TensorType
 data_dir = os.path.join(os.path.dirname(__file__), "data", "kernels")
 
 
-def as_variable(x: np.array) -> Variable:
-    return Variable(TensorType(x))
-
-
 class Kern(object):
-    def setUp(self, kernel_type):
-        self.kernel_type = kernel_type
-        self.x1 = as_variable(np.load(os.path.join(data_dir, "x1.npy")))
-        self.x2 = as_variable(np.load(os.path.join(data_dir, "x2.npy")))
-        self.n1, self.d1 = self.x1.data.numpy().shape
-        self.n2, self.d2 = self.x2.data.numpy().shape
-        self.kern = self.kernel_type(self.d1)
-        self.kern_str = self.kern.__class__.__name__
-        self.kx_expected = np.load(os.path.join(data_dir, "{}_kx.npy".format(
-            self.kern_str)))
-        self.kx2_expected = np.load(os.path.join(data_dir, "{}_kx2.npy".format(
-            self.kern_str)))
-        self.kdiag_expected = np.load(os.path.join(data_dir, 
-            "{}_kdiag.npy".format(self.kern_str)))
+    @classmethod
+    def setup_class(cls, kernel_type):
+        cls.kernel_type = kernel_type
+        cls.x1 = TensorType(np.load(os.path.join(data_dir, "x1.npy")))
+        cls.x2 = TensorType(np.load(os.path.join(data_dir, "x2.npy")))
+        cls.n1, cls.d1 = cls.x1.data.numpy().shape
+        cls.n2, cls.d2 = cls.x2.data.numpy().shape
+        cls.kern = cls.kernel_type(cls.d1)
+        cls.kern_str = cls.kern.__class__.__name__
+        cls.kx_expected = np.load(os.path.join(data_dir, "{}_kx.npy".format(
+            cls.kern_str)))
+        cls.kx2_expected = np.load(os.path.join(data_dir, "{}_kx2.npy".format(
+            cls.kern_str)))
+        cls.kdiag_expected = np.load(os.path.join(data_dir, 
+            "{}_kdiag.npy".format(cls.kern_str)))
 
     def test_add(self):
         """
@@ -85,11 +81,12 @@ class Kern(object):
 
 
 class Stationary(Kern):
-    def setUp(self, kernel_type):
-        super().setUp(kernel_type)
+    @classmethod
+    def setup_class(cls, kernel_type):
+        super(Stationary, cls).setup_class(kernel_type)
         x_shift = 0.34
-        self.x1_shift = self.x1 + x_shift
-        self.x2_shift = self.x1 + x_shift
+        cls.x1_shift = cls.x1 + x_shift
+        cls.x2_shift = cls.x1 + x_shift
 
     def test_K(self):
         super().test_K()
@@ -103,18 +100,19 @@ class Stationary(Kern):
 
 
 class ARD(Stationary):
-    def setUp(self, kernel_type):
-        super().setUp(kernel_type)
-        self.ard_length_scales = np.load(os.path.join(data_dir, 
+    @classmethod
+    def setup_class(cls, kernel_type):
+        super(ARD, cls).setup_class(kernel_type)
+        cls.ard_length_scales = np.load(os.path.join(data_dir, 
             "ard_length_scales.npy"))
-        self.kern_ard = self.kernel_type(self.d1, ARD=True, 
-            length_scales=self.ard_length_scales)
-        self.kx_ard_expected = np.load(os.path.join(data_dir, 
-            "{}_kx_ard.npy".format(self.kern_str)))
-        self.kx2_ard_expected = np.load(os.path.join(data_dir, 
-            "{}_kx2_ard.npy".format(self.kern_str)))
-        self.kdiag_ard_expected = np.load(os.path.join(data_dir,
-            "{}_kdiag_ard.npy".format(self.kern_str)))
+        cls.kern_ard = cls.kernel_type(cls.d1, ARD=True, 
+            length_scales=cls.ard_length_scales)
+        cls.kx_ard_expected = np.load(os.path.join(data_dir, 
+            "{}_kx_ard.npy".format(cls.kern_str)))
+        cls.kx2_ard_expected = np.load(os.path.join(data_dir, 
+            "{}_kx2_ard.npy".format(cls.kern_str)))
+        cls.kdiag_ard_expected = np.load(os.path.join(data_dir,
+            "{}_kdiag_ard.npy".format(cls.kern_str)))
 
     def test_K(self):
         super().test_K()
@@ -129,48 +127,57 @@ class ARD(Stationary):
         assert np.allclose(self.kdiag_ard_expected, kdiag_ard_actual)
 
 
-class TestWhite(Kern, TestCase):
-    def setUp(self):
-        super().setUp(kernels.White)    
+class TestWhite(Kern):
+    @classmethod
+    def setup_class(cls):
+        super(TestWhite, cls).setup_class(kernels.White)    
 
 
-class TestConstant(Kern, TestCase):
-    def setUp(self):
-        super().setUp(kernels.Constant) 
+class TestConstant(Kern):
+    @classmethod
+    def setup_class(cls):
+        super(TestConstant, cls).setup_class(kernels.Constant) 
 
 
-class TestBias(Kern, TestCase):
-    def setUp(self):
-        super().setUp(kernels.Bias)
+class TestBias(Kern):
+    @classmethod
+    def setup_class(cls):
+        super(TestBias, cls).setup_class(kernels.Bias)
 
 
-class TestExp(ARD, TestCase):
-    def setUp(self):
-        super().setUp(kernels.Exp)
+class TestExp(ARD):
+    @classmethod
+    def setup_class(cls):
+        super(TestExp, cls).setup_class(kernels.Exp)
 
 
-class TestMatern12(ARD, TestCase):
-    def setUp(self):
-        super().setUp(kernels.Matern12)
+class TestMatern12(ARD):
+    @classmethod
+    def setup_class(cls):
+        super(TestMatern12, cls).setup_class(kernels.Matern12)
 
 
-class TestMatern32(ARD, TestCase):
-    def setUp(self):
-        super().setUp(kernels.Matern32)
+class TestMatern32(ARD):
+    @classmethod
+    def setup_class(cls):
+        super().setup_class(kernels.Matern32)
 
 
-class TestMatern52(ARD, TestCase):
-    def setUp(self):
-        super().setUp(kernels.Matern52)
+class TestMatern52(ARD):
+    @classmethod
+    def setup_class(cls):
+        super().setup_class(kernels.Matern52)
 
 
-class TestRbf(ARD, TestCase):
-    def setUp(self):
-        super().setUp(kernels.Rbf)
+class TestRbf(ARD):
+    @classmethod
+    def setup_class(cls):
+        super().setup_class(kernels.Rbf)
 
 
-@pytest.mark.xfail(reason="Linear is different because we use .variance " + 
-    "instead of .length_scales (TODO)")
-class TestLinear(ARD, TestCase):
-    def setUp(self):
-        super().setUp(kernels.Linear)
+# @pytest.mark.xfail(reason="Linear is different because we use .variance " + 
+    # "instead of .length_scales (TODO)")
+class TestLinear(Kern):
+    @classmethod
+    def setup_class(cls):
+        super().setup_class(kernels.Linear)
