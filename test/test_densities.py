@@ -28,7 +28,7 @@ def _get_matrix(s):
         'densities', s + '.dat'))
     if x_np.size == 1:
         x_np = x_np.reshape((1))
-    return util.as_variable(x_np)
+    return util.as_tensor(x_np)
 
 
 def _err(measured, target, relative=True):
@@ -60,11 +60,12 @@ class TestGaussianMultivariateDiagonal(TestCase):
         assert err < comp_tol
 
     def test_sample(self):
+        torch.manual_seed(42)  # To ensure repeatability
         mu, sigma = TestGaussianMultivariateDiagonal._get_mu_sigma()
         d = GaussianMultivariateDiagonal(mu, sigma)
         s = d.sample(10 ** 7)
         mu_measured = torch.mean(s, 0)
-        cov_measured = util.as_variable(np.cov(s.data.numpy().transpose()))
+        cov_measured = util.as_tensor(np.cov(s.data.numpy().transpose()))
         mu_err = _err(mu_measured, mu)
         cov_err = _err(cov_measured, sigma.diag(), False)
         print(mu_err)
@@ -116,11 +117,12 @@ class TestGaussianMultivariateFull(TestCase):
         assert pdf_err < comp_tol
 
     def test_sample(self):
+        torch.manual_seed(42)  # To ensure repeatability
         mu, sigma = TestGaussianMultivariateFull._get_mu_sigma()
         d = GaussianMultivariateFull(mu, sigma)
         s = d.sample(10 ** 7)
         mu_measured = torch.mean(s, 0)
-        cov_measured = util.as_variable(np.cov(s.data.numpy().transpose()))
+        cov_measured = util.as_tensor(np.cov(s.data.numpy().transpose()))
         mu_err = _err(mu_measured, mu)
         cov_err = _err(cov_measured, sigma)
         print(mu_err)
