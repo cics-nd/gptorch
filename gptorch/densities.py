@@ -22,7 +22,7 @@ class Density(object):
     # def __init__(self):
     #     ...
 
-    def __init__(self, normalization=ut.as_variable(1.0)):
+    def __init__(self, normalization=ut.as_tensor(1.0)):
         self._dim = 0
         # _coefficient ensures that the pdf integrates to 1
         # Change normalization if you want an unnormalized density
@@ -157,7 +157,7 @@ class InverseGamma(Density):
         :param num_samples:
         :return: (Variable)
         """
-        return ut.as_variable(np.random.gamma(shape=self._gamma_shape,
+        return ut.as_tensor(np.random.gamma(shape=self._gamma_shape,
                                               scale=self._gamma_scale,
                                               size=(num_samples, self._dim))
                               ** (-1))
@@ -204,7 +204,7 @@ class UniformCube(Density):
         :return: (Variable)
         """
         return self.lower_bounds + self.range * \
-            ut.as_variable(np.random.rand(num_samples, self._dim))
+            ut.as_tensor(np.random.rand(num_samples, self._dim))
 
 
 # TODO
@@ -219,7 +219,7 @@ class GaussianUnivariate(Density):
         variance = sigma_var = self.sigma^2
         """
 
-    def __init__(self, mu, sigma_var, normalization=ut.as_variable(1.0)):
+    def __init__(self, mu, sigma_var, normalization=ut.as_tensor(1.0)):
         """
         Args:
             mu (torch.autograd.Variable): vector of means
@@ -244,7 +244,7 @@ class GaussianUnivariate(Density):
             (torch.autograd.Variable) the density at x
         """
 
-        return self.normalization * ut.as_variable(np.array([np.prod(
+        return self.normalization * ut.as_tensor(np.array([np.prod(
             scipy.stats.norm.pdf(
                 x_i.data.numpy(),
                 self.mu.data.numpy(),
@@ -258,7 +258,7 @@ class GaussianUnivariate(Density):
         :param num_samples:
         :return: (Variable)
         """
-        return ut.as_variable(np.random.normal(
+        return ut.as_tensor(np.random.normal(
             size=(num_samples, self._dim),
             loc=self.mu.data.numpy().reshape((1, -1)),
             scale=self.sigma_std.data.numpy().reshape((1, -1))))
@@ -274,7 +274,7 @@ class GaussianMultivariateDiagonal(Density):
     mean = mu
     variance = sigma_var = self.sigma^2
     """
-    def __init__(self, mu, sigma_var, normalization=ut.as_variable(1.0)):
+    def __init__(self, mu, sigma_var, normalization=ut.as_tensor(1.0)):
         """
         Args:
             mu (torch.autograd.Variable): vector of means
@@ -299,7 +299,7 @@ class GaussianMultivariateDiagonal(Density):
             (torch.autograd.Variable) the density at x
         """
 
-        return self.normalization * ut.as_variable(np.array([np.prod(
+        return self.normalization * ut.as_tensor(np.array([np.prod(
             scipy.stats.norm.pdf(
                 x_i.data.numpy(),
                 self.mu.data.numpy(),
@@ -313,7 +313,7 @@ class GaussianMultivariateDiagonal(Density):
         :param num_samples:
         :return: (Variable)
         """
-        return ut.as_variable(np.random.normal(
+        return ut.as_tensor(np.random.normal(
             size=(num_samples, self._dim),
             loc=self.mu.data.numpy().reshape((1, -1)),
             scale=self.sigma_std.data.numpy().reshape((1, -1))))
@@ -330,7 +330,7 @@ class GaussianMultivariateFull(Density):
     mean = mu
     variance = sigma_var = self.sigma^2
     """
-    def __init__(self, mu, sigma, normalization=ut.as_variable(1.0),
+    def __init__(self, mu, sigma, normalization=ut.as_tensor(1.0),
                  compute_precision=False, compute_chol=False):
         """
         Args:
