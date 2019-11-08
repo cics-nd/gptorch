@@ -128,7 +128,7 @@ class Model(torch.nn.Module):
             # self._previous_x = x  # store the last known good value
             print("Warning: inf or nan in gradient: replacing with zeros")
             return (
-                loss.item().astype(np.float64),
+                loss.item(),
                 np.where(grad_isfinite, grad, 0.0).astype(np.float64),
             )
 
