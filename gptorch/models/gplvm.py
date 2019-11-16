@@ -7,7 +7,8 @@ Gaussian Process Latent Variable Model (GPLVM)
 #
 #
 
-from __future__ import absolute_import
+from warnings import warn
+
 from gptorch.model import GPModel, Param
 from gptorch.likelihoods import Gaussian
 from gptorch.mean_functions import Zero
@@ -73,6 +74,9 @@ class GPLVM(GPModel):
                 (HD video), False for the case of large p, small n.
                 This option affects the computation of KL(q(X) || p(X))
         """
+
+        warn("GPLVM is unstable and not recommended for use!")
+        
         assert isinstance(
             observations, np.ndarray
         ), "Observation matrix should be a np.ndarray."
@@ -217,7 +221,7 @@ class GPLVM(GPModel):
             num_parameters += param.data.numpy().size
         print("GPLVM: Number of optimization parameters is  %d" % num_parameters)
 
-    def compute_loss(self):
+    def log_likelihood(self):
         """
         Computation graph for the ELBO (Evidence Lower Bound) of
         the variational GPLVM
@@ -326,35 +330,9 @@ class GPLVM(GPModel):
                 KLD += 0.5 * Lej_inv.t().mm(Lej_inv).trace() + Le[j].diag().log().sum()
 
         elbo -= KLD
-        return -elbo
+        return elbo
 
-    def _pre_compute(self):
-        """Pre-computation for the projection
-
-        Fixed terms in test time are manually identified,
-        Only iid latent is implemented.
-        """
-        # Save the fixed terms here
-        # self.saved_terms = {}
-        if self.observed_dims is not None:
-            # select observed dims to compute
-            Y = th.cat((self.Y.index_select(1, self.observed_dims), self.Y_test), 0)
-            self.saved_terms["YYT"] = Y.mm(Y.t())
-
-        # computes kernel expectations
-        if self.data_type == "iid":
-            eKxz = self.kernel.eKxz(self.Z, self.Xmean, self.Xcov)
-            eKzxKxz = self.kernel.eKzxKxz(self.Z, self.Xmean, self.Xcov)
-            self.saved_terms["eKxz"] = eKxz
-            self.saved_terms["eKzxKxz"] = eKzxKxz
-        else:
-            print("regressive case, not implemented")
-
-        Kzz = self.kernel.K(self.Z) + self.jitter.expand(self.Z.size(0)).diag()
-        L = cholesky(Kzz, flag="L")
-        self.saved_terms["L"] = L
-
-    def _compute_loss_inference(self):
+    def log_likelihood_inference(self):
         """Computes the loss in the inference mode, e.g. for projection.
         Handles both fully observed and partially observed data.
 
@@ -436,185 +414,39 @@ class GPLVM(GPModel):
             )
 
         elbo -= KLD
-        return -elbo
+        return elbo
 
-    def optimize(self, method="LBFGS", max_iter=2000, verbose=True, lr=0.01):
-        """
-        Optimizes the model by minimizing the loss (from :method:) w.r.t.
-        model parameters.
-
-        Args:
-            method (torch.optim.Optimizer, optional): Optimizer in PyTorch
-                (maybe add scipy optimizer in the future), default is `Adam`.
-            max_iter (int): Max iterations, default 2000.
-            verbose (bool, optional): Shows more details on optimization
-                process if True.
-
-        Todo:
-            Add stochastic optimization, such as mini-batch.
-
-        Returns:
-            (np.array, value):
-
-                losses: losses over optimization steps, (max_iter, )
-                time: time taken approximately
-
-        """
-        parameters = ifilter(lambda p: p.requires_grad, self.parameters())
-
-        if method == "SGD":
-            self.optimizer = th.optim.SGD(parameters, lr=0.05, momentum=0.9)
-        elif method == "Adam":
-            self.optimizer = th.optim.Adam(
-                parameters, lr=lr, betas=(0.9, 0.999), eps=1e-06, weight_decay=0.00001
-            )
-        elif method == "LBFGS":
-            self.optimizer = th.optim.LBFGS(
-                parameters,
-                lr=1,
-                max_iter=5,
-                max_eval=None,
-                tolerance_grad=1e-05,
-                tolerance_change=1e-09,
-                history_size=50,
-                line_search_fn=None,
-            )
-        elif method == "Adadelta":
-            self.optimizer = th.optim.Adadelta(
-                parameters, lr=1.0, rho=0.9, eps=1e-06, weight_decay=0.00001
-            )
-        elif method == "Adagrad":
-            self.optimizer = th.optim.Adagrad(
-                parameters, lr=0.01, lr_decay=0, weight_decay=0
-            )
-        elif method == "Adamax":
-            self.optimizer = th.optim.Adamax(
-                parameters, lr=0.002, betas=(0.9, 0.999), eps=1e-08, weight_decay=0
-            )
-        elif method == "ASGD":
-            self.optimizer = th.optim.ASGD(
-                parameters,
-                lr=0.01,
-                lambd=0.0001,
-                alpha=0.75,
-                t0=1000000.0,
-                weight_decay=0,
-            )
-        elif method == "RMSprop":
-            self.optimizer = th.optim.RMSprop(
-                parameters,
-                lr=lr,
-                alpha=0.99,
-                eps=1e-08,
-                weight_decay=0.00,
-                momentum=0.01,
-                centered=False,
-            )
-        elif method == "Rprop":
-            self.optimizer = th.optim.Rprop(
-                parameters, lr=0.01, etas=(0.5, 1.2), step_sizes=(1e-06, 50)
-            )
-        # scipy.optimize.minimize
-        # suggest to use L-BFGS-B, BFGS
-        elif method in [
-            "CG",
-            "BFGS",
-            "Newton-CG",
-            "Nelder-Mead",
-            "Powell",
-            "L-BFGS-B",
-            "TNC",
-            "COBYLA",
-            "SLSQP",
-            "dogleg",
-            "trust-ncg",
-        ]:
-            print("Scipy.optimize.minimize...")
-            return self._optimize_scipy(method=method, maxiter=max_iter, disp=verbose)
-
-        else:
-            raise Exception(
-                "Optimizer %s is not found. Please choose one of the"
-                "following optimizers supported in PyTorch:"
-                "Adadelt, Adagrad, Adam, Adamax, ASGD, LBFGS, "
-                "RMSprop, Rprop, SGD, LBFGS. Or the optimizers "
-                "supported scipy.optimize.minminze: BFGS, L-BFGS-B,"
-                "CG, Newton-CG, Nelder-Mead, Powell, TNC, COBYLA,"
-                "SLSQP, dogleg, trust-ncg, etc." % method
-            )
-
-        losses = np.zeros(max_iter)
-        tic = time()
-
-        print(
-            "{}: Start optimization via {} in the {} mode".format(
-                self.__class__.__name__,
-                method,
-                "inference" if self.inference else "training",
-            )
-        )
-
+    def loss(self):
         if not self.inference:
-            compute_loss = self.compute_loss
+            return super().loss()
         else:
-            compute_loss = self._compute_loss_inference
-        if verbose:
-            if not method == "LBFGS":
-                for iter in range(max_iter):
-                    self.optimizer.zero_grad()
-                    # forward
-                    loss = compute_loss()
-                    # backward
-                    loss.backward()
-                    self.optimizer.step()
-                    losses[iter] = loss.data.numpy()
-                    print("Iter: %d\tLoss: %s" % (iter, loss.data.numpy()))
-            else:
-                for iter in range(max_iter):
+            return -(self.log_likelihood_inference() + self.log_prior())
 
-                    def closure():
-                        self.optimizer.zero_grad()
-                        loss = compute_loss()
-                        loss.backward()
-                        return loss
+    def _pre_compute(self):
+        """Pre-computation for the projection
 
-                    loss = self.optimizer.step(closure)
-                    losses[iter] = loss.data.numpy()
-                    print("Iter: %d\tLoss: %s" % (iter, loss.data.numpy()))
+        Fixed terms in test time are manually identified,
+        Only iid latent is implemented.
+        """
+        # Save the fixed terms here
+        # self.saved_terms = {}
+        if self.observed_dims is not None:
+            # select observed dims to compute
+            Y = th.cat((self.Y.index_select(1, self.observed_dims), self.Y_test), 0)
+            self.saved_terms["YYT"] = Y.mm(Y.t())
+
+        # computes kernel expectations
+        if self.data_type == "iid":
+            eKxz = self.kernel.eKxz(self.Z, self.Xmean, self.Xcov)
+            eKzxKxz = self.kernel.eKzxKxz(self.Z, self.Xmean, self.Xcov)
+            self.saved_terms["eKxz"] = eKxz
+            self.saved_terms["eKzxKxz"] = eKzxKxz
         else:
-            if not method == "LBFGS":
-                for iter in range(max_iter):
-                    self.optimizer.zero_grad()
-                    # forward
-                    loss = compute_loss()
-                    # backward
-                    loss.backward()
-                    self.optimizer.step()
-                    losses[iter] = loss.data.numpy()
-                    if iter % 10 == 0:
-                        print("Iter: %d\tLoss: %s" % (iter, loss.data.numpy()))
-            else:
-                for iter in range(max_iter):
+            print("regressive case, not implemented")
 
-                    def closure():
-                        self.optimizer.zero_grad()
-                        loss = compute_loss()
-                        loss.backward()
-                        return loss
-
-                    loss = self.optimizer.step(closure)
-                    losses[iter] = loss.data.numpy()
-                    if iter % 10 == 0:
-                        print("Iter: %d\tLoss: %s" % (iter, loss.data.numpy()))
-
-        t = time() - tic
-        print("Optimization time taken: %s s" % t)
-        print("Optimization method: %s" % str(self.optimizer))
-        if len(losses) == max_iter:
-            print("Optimization terminated by reaching the maximum iterations\n")
-        else:
-            print("Optimization terminated by getting below the tolerant error\n")
-        return losses, t
+        Kzz = self.kernel.K(self.Z) + self.jitter.expand(self.Z.size(0)).diag()
+        L = cholesky(Kzz, flag="L")
+        self.saved_terms["L"] = L
 
     def project(self, observ_test, observed_dims=None):
         """Infers the latent input corresponding to the new observed data
@@ -840,58 +672,3 @@ class GPLVM(GPModel):
 
     def _forecast(self, time_interval):
         pass
-
-    # def evaluate_(self, labels):
-    #     """Evaluate the learned latent embedding using:
-    #     **nearest neighbour error**: the number of training data whose closest
-    #     neighbour in the latent space corresponds to a data point of a different
-    #     class.
-    #
-    #     Args:
-    #         labels(np.ndarray): labels of the data
-    #     """
-    #     pass
-
-    # def _reparam_vargp(self, Xmean_bar, Lambda):
-    #     """
-    #     Reparameterization of the variational gaussian process approximation.
-    #
-    #     Reference:
-    #         @article{Opper:2009,
-    #           title = {The Variational Gaussian Approximation Revisited},
-    #           author = {Opper, Manfred and Archambeau, Cedric},
-    #           journal = {Neural Comput.},
-    #           year = {2009},
-    #           pages = {786--792},
-    #         }
-    #
-    #     Args:
-    #         Xmean_bar (Tensor or Variable): the reparameterized mean, n x q
-    #         Lambda (Tensor or Variable): the reparameterized covariance, n x q
-    #
-    #     Return:
-    #         Xmean (Tensor): the orignal mean
-    #         Xcov (Tensor): the original covariance matrix
-    #     """
-    #
-    #     Kx = self.kernel_x.K(np.array(xrange(self.Y.size(0)))[:, None])
-    #     Lkx = cholesky(Kx)
-    #     # Kx_inverse = inverse(Kx)
-    #     Xmean = Kx.mm(Xmean_bar)
-    #     Xcov = []
-    #     # S = []
-    #     Le = []
-    #     In = Variable(th.eye(self.Y.size(0)).type(float_type))
-    #     for j in xrange(Xmean_bar.size(1)):
-    #         Ej = Lkx.t().mm(Lambda[:, j].diag()).mm(Lkx) + In
-    #         Lej = cholesky(Ej)
-    #         Lsj = trtrs(Lej, Lkx.t()).t()
-    #         Sj = Lsj.mm(Lsj.t())
-    #         # potential improvement by Cholesky decomp
-    #         # Sj = inverse(self.lambda_[:, j].diag() + Kx_inverse)
-    #         Xcov.append(Sj.diag().unsqueeze(1))
-    #         # S.append(Sj)
-    #         Le.append(Lej)
-    #     Xcov = th.cat(Xcov, 1)
-    #
-    #     return Xmean, Xcov

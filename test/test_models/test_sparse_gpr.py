@@ -87,26 +87,26 @@ class TestVFE(_InducingData):
 
         model = VFE(x, y, kernel, inducing_points=z, likelihood=likelihood,
             mean_function=mean_functions.Zero(1))
-        loss = model.compute_loss()
+        loss = model.loss()
         assert isinstance(loss, torch.Tensor)
         assert loss.ndimension() == 0
         # Computed while I trust the result.
         assert loss.item() == pytest.approx(8.842242323920674)
 
         # Test ability to specify x and y
-        loss_xy = model.compute_loss(x=TensorType(x), y=TensorType(y))
+        loss_xy = model.loss(x=TensorType(x), y=TensorType(y))
         assert isinstance(loss_xy, torch.Tensor)
         assert loss_xy.item() == loss.item()
 
         with pytest.raises(ValueError):
             # Size mismatch
-            model.compute_loss(x=TensorType(x[:x.shape[0] // 2]))
+            model.loss(x=TensorType(x[:x.shape[0] // 2]))
 
     @needs_cuda
     def test_compute_loss_cuda(self):
         model = self._get_model()
         model.cuda()
-        loss = model.compute_loss()
+        loss = model.loss()
         assert loss.is_cuda
 
     def test_predict(self):
@@ -182,23 +182,23 @@ class TestSVGP(_InducingData):
         model.induced_output_chol_cov.data = model.induced_output_chol_cov.\
             _transform.inv(TensorType(u_l_s))
 
-        loss = model.compute_loss()
+        loss = model.loss()
         assert isinstance(loss, torch.Tensor)
         assert loss.ndimension() == 0
         # Computed while I trust the result.
         assert loss.item() == pytest.approx(9.534628739243518)
 
         # Test ability to specify x and y
-        loss_xy = model.compute_loss(x=TensorType(x), y=TensorType(y))
+        loss_xy = model.loss(x=TensorType(x), y=TensorType(y))
         assert isinstance(loss_xy, torch.Tensor)
         assert loss_xy.item() == loss.item()
 
         with pytest.raises(ValueError):
             # Size mismatch
-            model.compute_loss(x=TensorType(x[:x.shape[0] // 2]), y=TensorType(y))
+            model.loss(x=TensorType(x[:x.shape[0] // 2]), y=TensorType(y))
 
         model_minibatch = SVGP(x, y, kernel, batch_size=1)
-        loss_mb = model_minibatch.compute_loss()
+        loss_mb = model_minibatch.loss()
         assert isinstance(loss_mb, torch.Tensor)
         assert loss_mb.ndimension() == 0
 
@@ -207,19 +207,19 @@ class TestSVGP(_InducingData):
         model_full_mb.induced_output_mean.data = TensorType(u_mu)
         model_full_mb.induced_output_chol_cov.data = model_full_mb.induced_output_chol_cov.\
             _transform.inv(TensorType(u_l_s))
-        loss_full_mb = model_full_mb.compute_loss()
+        loss_full_mb = model_full_mb.loss()
         assert isinstance(loss_full_mb, torch.Tensor)
         assert loss_full_mb.ndimension() == 0
         assert loss_full_mb.item() == pytest.approx(loss.item())
 
-        model.compute_loss(model.X, model.Y)  # Just make sure it works!
+        model.loss(model.X, model.Y)  # Just make sure it works!
 
     @needs_cuda
     def test_compute_loss_cuda(self):
         model = self._get_model()
         model.cuda()
 
-        loss = model.compute_loss()
+        loss = model.loss()
         assert loss.is_cuda
 
     def test_predict(self):
