@@ -1,3 +1,7 @@
+# File: __init__.py
+# Author: Yinhao Zhu (yzhu10@nd.edu)
+
+from .base import GPModel
 
 """
 Core Gaussian process models.
@@ -13,6 +17,5 @@ The latter is special in that it is tractably compatible with non-conjugate
 likelihoods, making it usable for non-regression tasks (e.g. classification).
 """
 
-from __future__ import absolute_import
 from .gpr import GPR
 from .sparse_gpr import VFE, SVGP

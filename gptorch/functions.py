@@ -1,4 +1,3 @@
-
 """
 ``gptorch.functions`` contains self-defined functions subclassing
 :modile:`torch.autograd.Function` that performs Cholesky decomposition, solving
@@ -15,8 +14,12 @@ torch_version = [int(s) for s in torch.__version__.split(".")]
 _potri = torch.cholesky_inverse if torch_version >= [1, 1, 0] else torch.potri
     
 
-def jit_op(op, x: torch.Tensor, max_tries: int=10, verbose: bool=False) \
-        -> torch.Tensor:
+TRIANGULAR_SOLVE = "triangular_solve" in dir(torch)
+
+
+def jit_op(
+    op, x: torch.Tensor, max_tries: int = 10, verbose: bool = False
+) -> torch.Tensor:
     """
     Attempt a potentially-unstable linear algebra operation on a matrix.
     If it fails, then try adding more and more jitter and try again...
@@ -30,13 +33,13 @@ def jit_op(op, x: torch.Tensor, max_tries: int=10, verbose: bool=False) \
 
     for i in range(max_tries):
         try:
-            this_jitter = 10.0 ** (-max_tries + i) * torch.eye(*x.shape, 
-                dtype=x.dtype)
+            this_jitter = 10.0 ** (-max_tries + i) * torch.eye(*x.shape, dtype=x.dtype)
             return op(x + this_jitter)
         except RuntimeError as e:
             if verbose:
-                print("Op {} failed (try {} / {})".format(op.__name__, i + 1, 
-                    max_tries))
+                print(
+                    "Op {} failed (try {} / {})".format(op.__name__, i + 1, max_tries)
+                )
     raise RuntimeError("Max tries exceeded.")
 
 
@@ -65,38 +68,9 @@ def lt_log_determinant(L):
     return L.diag().log().sum()
 
 
-def SoftplusInv(y, lower=1e-6):
-    '''Transforms for handling constraints on parameters, e.g. positive variance
-    For get the initial value of x, where
-
-    .. math::
-        y = \mathrm{Softplus}(x) = \log(1 + e^x)
-
-    SoftplusInv is used to represent the positive constraints of some
-    parameters, such as variance.
-
-    Args:
-        y (numpy.ndarray or real number): output of softplus,
-            value of the parameter value
-
-    Returns:
-        the 'free' parameter used in optimization
-    '''
-    x = torch.log(torch.exp(y - lower) - 1.)
-    if y.numpy().any() > 35:
-        return y - lower
-    else:
-        return x
-
-
-def transform(variable):
-    # intent to replace the transform method within the Param class
-    assert isinstance(variable, Variable), "Input to this function should be a Variable"
-    if variable.requires_transform:
-        return F.softplus(variable, threshold=35)
-    else:
-        return variable
-
-
 def trtrs(b: torch.Tensor, a: torch.Tensor, lower=True) -> torch.Tensor:
-    return torch.triangular_solve(b, a, upper=not lower)[0]
+    """
+    Solve ax=b with triangular a.
+    """
+    op = torch.triangular_solve if TRIANGULAR_SOLVE else torch.trtrs
+    return op(b, a, upper=not lower)[0]

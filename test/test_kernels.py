@@ -175,8 +175,12 @@ class TestRbf(ARD):
         super().setup_class(kernels.Rbf)
 
 
-# @pytest.mark.xfail(reason="Linear is different because we use .variance " + 
-    # "instead of .length_scales (TODO)")
+class TestPeriodic(ARD):
+    @classmethod
+    def setup_class(cls):
+        super().setup_class(kernels.Periodic)
+
+
 class TestLinear(Kern):
     @classmethod
     def setup_class(cls):

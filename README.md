@@ -29,13 +29,14 @@ $ source activate gptorch
 
 ## Models implemented:
 
-- GP regression
-- Sparse GP regression (variational inducing points)
+- Vanilla GP regression model
+- [Sparse GP (variational free energy model)](http://www.jmlr.org/proceedings/papers/v9/titsias10a/titsias10a.pdf)
+- [Sparse Variational GP](http://proceedings.mlr.press/v38/hensman15.pdf)
 
 ## To be implemented:
 
 - [FITC sparse GPs](http://papers.nips.cc/paper/2857-sparse-gaussian-processes-using-pseudo-inputs.pdf)
-- [Sparse GPs with SVI](http://proceedings.mlr.press/v38/hensman15.pdf)
+- [Structured ("Kronecker") GPs](https://www.sciencedirect.com/science/article/pii/S0021999119300397)
 - [Bayesian GPLVM](http://proceedings.mlr.press/v9/titsias10a/titsias10a.pdf)
 - [Dynamical GP-LVM](http://papers.nips.cc/paper/4330-variational-gaussian-process-dynamical-systems)/[Bayesian warped GP](http://papers.nips.cc/paper/4494-bayesian-warped-gaussian-processes)
 - Non-Gaussian likelihoods (e.g. for classification)

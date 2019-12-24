@@ -24,11 +24,11 @@ requirements = [
 ]
 
 setup(name="gptorch",
-    version="0.2.3",
+    version="0.3.0",
     description="gptorch - a Gaussian process toolbox built on PyTorch",
     author="Yinhao Zhu, Steven Atkinson",
     author_email="yzhu10@nd.edu, satkinso@nd.edu",
     url="https://github.com/cics-nd/gptorch",
     install_requires=requirements,
-    packages=find_packages(),
-    )
+    packages=find_packages()
+)

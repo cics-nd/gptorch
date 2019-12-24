@@ -49,6 +49,7 @@ float_type = th.DoubleTensor
 
 # TODO: necesary to be able to handle any type of kernels (BB)
 
+
 class Rbf(gptorch.kernels.Rbf):
     def eKxx(self, X):
         """psi_0 in GPy.
@@ -92,25 +93,32 @@ class Rbf(gptorch.kernels.Rbf):
         # every row of Xmean_2 is the repetition of the Euclidean norm of
         # Xmean[i, :], n x m
         Xmean_2 = Xmean.pow(2).sum(1).view(-1, 1).expand(num_data, num_inducing)
-        # compute the eKxz[i, :] by iterating over each datum, 
+        # compute the eKxz[i, :] by iterating over each datum,
         # could be distributed
         eKxz_list = []
         for i in xrange(num_data):
-            Zi = Z / \
-                 th.sqrt(length_scales.pow(2).expand_as(Z) +
-                         Xcov[i, :].expand_as(Z))
+            Zi = Z / th.sqrt(
+                length_scales.pow(2).expand_as(Z) + Xcov[i, :].expand_as(Z)
+            )
             Xmean_Zi = Xmean[i, :].unsqueeze(0).mm(Zi.t())
             # Zi_2 = Zi.pow(2).sum(1).t()
             Zi_2 = Zi.pow(2).sum(1).view(1, -1)
-            log_term = (Xcov[i, :] / length_scales.pow(2) +
-                        Variable(th.ones(dim_latent).type(float_type))).log().\
-                sum().expand_as(Xmean_Zi)
-            eKxz_list.append(Xmean_2[i, :].unsqueeze(0) + Zi_2 - \
-                             2 * Xmean_Zi + log_term)
+            log_term = (
+                (
+                    Xcov[i, :] / length_scales.pow(2)
+                    + Variable(th.ones(dim_latent).type(float_type))
+                )
+                .log()
+                .sum()
+                .expand_as(Xmean_Zi)
+            )
+            eKxz_list.append(
+                Xmean_2[i, :].unsqueeze(0) + Zi_2 - 2 * Xmean_Zi + log_term
+            )
 
-        return th.exp(-0.5 * th.cat(eKxz_list, 0)) * \
-            variance.expand(num_data, num_inducing)
-
+        return th.exp(-0.5 * th.cat(eKxz_list, 0)) * variance.expand(
+            num_data, num_inducing
+        )
 
     def eKxz_parallel(self, Z, Xmean, Xcov):
         # TODO: add test
@@ -146,12 +154,11 @@ class Rbf(gptorch.kernels.Rbf):
         L = cholesky(Lambda + Xcov)
         xz = Xmean.unsqueeze(2).expand(n, q, m) - Z.unsqueeze(0).expand(n, q, m)
         Lxz = th.triangular_solve(xz, L, upper=False)[0]
-        half_log_dets = L.diag().log().sum(1) \
-                        - length_scales.log().sum().expand(n)
+        half_log_dets = L.diag().log().sum(1) - length_scales.log().sum().expand(n)
 
-        return self.variance.transform().expand(n, m) \
-               * th.exp(-0.5 * Lxz.pow(2).sum(1) - half_log_dets.expand(n, m))
-
+        return self.variance.transform().expand(n, m) * th.exp(
+            -0.5 * Lxz.pow(2).sum(1) - half_log_dets.expand(n, m)
+        )
 
     def eKzxKxz(self, Z, Xmean, Xcov, requires_transform=True, sum=True):
         """Computes the expectation, psi_2, m x m:
@@ -184,28 +191,35 @@ class Rbf(gptorch.kernels.Rbf):
         Z1_2 = Z1.pow(2).sum(1).expand_as(ZZT)
         shared_term = Z1_2 + Z1_2.t() - 2 * ZZT
         # \Xmean_{i,j}
-        Xmean = Xmean / \
-             th.sqrt(length_scales.pow(2).expand_as(Xmean) +
-                     2 * Xcov)
+        Xmean = Xmean / th.sqrt(length_scales.pow(2).expand_as(Xmean) + 2 * Xcov)
         Xmean_2 = Xmean.pow(2).sum(1).view(-1, 1)
 
         for i in xrange(num_data):
-            Zi = Z / \
-                 th.sqrt(length_scales.pow(2).expand_as(Z) +
-                         2 * Xcov[i, :].expand_as(Z))
+            Zi = Z / th.sqrt(
+                length_scales.pow(2).expand_as(Z) + 2 * Xcov[i, :].expand_as(Z)
+            )
             Zi_2 = Zi.pow(2).sum(1).expand_as(eKzxKxz)
 
-            Xmean_Zi = Zi.mm(Xmean[i, :].unsqueeze(1)).expand_as(eKzxKxz) + \
-                    Xmean[i, :].unsqueeze(0).mm(Zi.t()).expand_as(eKzxKxz)
+            Xmean_Zi = Zi.mm(Xmean[i, :].unsqueeze(1)).expand_as(eKzxKxz) + Xmean[
+                i, :
+            ].unsqueeze(0).mm(Zi.t()).expand_as(eKzxKxz)
 
-            log_term = th.log(Xcov[i, :] * 2 / length_scales.pow(2) +
-                        Variable(th.ones(dim_latent).type(float_type))).sum().\
-                expand_as(eKzxKxz)
+            log_term = (
+                th.log(
+                    Xcov[i, :] * 2 / length_scales.pow(2)
+                    + Variable(th.ones(dim_latent).type(float_type))
+                )
+                .sum()
+                .expand_as(eKzxKxz)
+            )
 
-            eKzxKxz_i = \
-                th.exp(-0.25 * shared_term - Xmean_2[i, :].expand_as(eKzxKxz)
-                       - 0.25 * (Zi_2 + Zi_2.t() + 2 * Zi.mm(Zi.t())) + Xmean_Zi
-                       - 0.5 * log_term) * variance.pow(2).expand_as(eKzxKxz)
+            eKzxKxz_i = th.exp(
+                -0.25 * shared_term
+                - Xmean_2[i, :].expand_as(eKzxKxz)
+                - 0.25 * (Zi_2 + Zi_2.t() + 2 * Zi.mm(Zi.t()))
+                + Xmean_Zi
+                - 0.5 * log_term
+            ) * variance.pow(2).expand_as(eKzxKxz)
             if sum:
                 eKzxKxz += eKzxKxz_i
             else:

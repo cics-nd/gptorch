@@ -7,23 +7,23 @@
 Class for Vanilla GP regression.
 """
 
-from __future__ import absolute_import
 import torch
 import numpy as np
 
 from .. import kernels
-from ..model import GPModel, Param
+from ..model import Param
 from .. import likelihoods
 from ..functions import cholesky, inverse, lt_log_determinant, trtrs
 from ..util import TensorType
+from .base import GPModel
 
 
 class GPR(GPModel):
     """
     Gaussian Process Regression
     """
-    def __init__(self, observations, input, kernel, mean_function=None,
-                 likelihood=None, name='gpr'):
+
+    def __init__(self, x, y, kernel, mean_function=None, likelihood=None, name="gpr"):
         """
         Default likelihood is Gaussain, mean function is zero.
 
@@ -41,69 +41,77 @@ class GPR(GPModel):
                 for computing the parameterized mean function.
             likelihood (Likelihood): A likelihood model
         """
-        if likelihood is None:
-            likelihood = likelihoods.Gaussian()
-        super().__init__(observations, input, kernel, likelihood,
-                                  mean_function, name)
+        
+        super().__init__(x, y, kernel, likelihood, mean_function, name)
 
-    def compute_loss(self):
+    def log_likelihood(self, x=None, y=None):
         """
-        Loss is equal to the negative of the log likelihood
+        Loss is equal to the negative of the prior log likelihood
 
         Adapted from Rasmussen & Williams, GPML (2006), p. 19, Algorithm 2.1.
         """
 
-        num_input = self.Y.size(0)
-        dim_output = self.Y.size(1)
+        x = x if x is not None else self.X
+        y = y if y is not None else self.Y
+        if not x.shape[0] == y.shape[0]:
+            raise ValueError("X and Y must have same # data.")
 
-        L = cholesky(self._compute_kyy())
-        alpha = trtrs(self.Y, L)
+        num_input, dim_output = y.shape
+
+        L = cholesky(self._compute_kyy(x=x))
+        alpha = trtrs(y - self.mean_function(x), L)
         const = TensorType([-0.5 * dim_output * num_input * np.log(2 * np.pi)])
-        loss = 0.5 * alpha.pow(2).sum() + dim_output * lt_log_determinant(L) \
-            - const
-        return loss
+        if alpha.is_cuda:
+            const = const.cuda()  # TODO cache this?
+        loglik = -0.5 * alpha.pow(2).sum() - dim_output * lt_log_determinant(L) + const
+        return loglik
 
-    def _compute_kyy(self):
+    def _compute_kyy(self, x=None):
         """
         Computes the covariance matrix over the training inputs
 
         Returns:
             Ky (TensorType)
         """
-        num_input = self.Y.size(0)
 
-        return self.kernel.K(self.X) + \
-        (self.likelihood.variance.transform()).expand(
-            num_input, num_input).diag().diag()
+        x = x if x is not None else self.X
+        num_input = x.shape[0]
 
-    def _predict(self, input_new: TensorType, diag=True):
+        return (
+            self.kernel.K(x)
+            + (self.likelihood.variance.transform())
+            .expand(num_input, num_input)
+            .diag()
+            .diag()
+        )
+
+    def _predict(self, x_new: TensorType, diag=True, x=None):
         """
         This method computes
 
         .. math::
             p(F^* | Y )
 
-        where F* are points on the GP at input_new, Y are observations at the
+        where F* are points on the GP at x_new, Y are observations at the
         input X of the training data.
-        :param input_new: test inputs; should be two-dimensional
+        :param x_new: test inputs; should be two-dimensional
         """
-        k_ys = self.kernel.K(self.X, input_new)
 
-        L = cholesky(self._compute_kyy())
+        x = x if x is not None else self.X
+
+        k_ys = self.kernel.K(x, x_new)
+
+        L = cholesky(self._compute_kyy(x=x))
         A = trtrs(k_ys, L)
-        V = trtrs(self.Y, L)
-        mean_f = A.t() @ V
-
-        if self.mean_function is not None:
-            mean_f += self.mean_function(input_new)
-
-        var_f_1 = self.kernel.Kdiag(input_new) if diag else \
-            self.kernel.K(input_new)  # Kss
+        V = trtrs(self.Y - self.mean_function(x), L)
+        mean_f = A.t() @ V + self.mean_function(x_new)
 
         if diag:
-            var_f_2 = (A * A).sum(0)
+            var_f = (
+                self.kernel.Kdiag(x_new) - 
+                (A * A).sum(0)
+            )[:, None].expand_as(mean_f)
         else:
-            var_f_2 = A.t() @  A
-        var_f = var_f_1 - var_f_2
+            var_f = self.kernel.K(x_new) - A.t() @ A
 
         return mean_f, var_f

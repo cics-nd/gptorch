@@ -1,3 +1,6 @@
+# Filename: requirements.txt
+# Created: Saturday, July 13th 2019, 6:32:27 pm
+# Author: Steven Atkinson (steven@atkinson.mn)
 
 torch>=1
 numpy>=1.10
