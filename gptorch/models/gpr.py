@@ -44,7 +44,7 @@ class GPR(GPModel):
         
         super().__init__(x, y, kernel, likelihood, mean_function, name)
 
-    def compute_loss(self, x=None, y=None):
+    def log_likelihood(self, x=None, y=None):
         """
         Loss is equal to the negative of the prior log likelihood
 
@@ -63,8 +63,8 @@ class GPR(GPModel):
         const = TensorType([-0.5 * dim_output * num_input * np.log(2 * np.pi)])
         if alpha.is_cuda:
             const = const.cuda()  # TODO cache this?
-        loss = 0.5 * alpha.pow(2).sum() + dim_output * lt_log_determinant(L) - const
-        return loss
+        loglik = -0.5 * alpha.pow(2).sum() - dim_output * lt_log_determinant(L) + const
+        return loglik
 
     def _compute_kyy(self, x=None):
         """

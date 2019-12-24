@@ -107,6 +107,7 @@ class TestGPModel(object):
         """
 
         gp = self._get_model()
+        f = getattr(gp, attr)
         x_test = np.random.randn(5, gp.input_dimension)
         x_test_torch = TensorType(x_test)
 

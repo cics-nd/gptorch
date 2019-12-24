@@ -105,7 +105,7 @@ class VFE(_InducingPointsGP):
             self.mean_function, Zero
         ), "Mean functions not implemented for VFE yet."
 
-    def compute_loss(self, x=None, y=None):
+    def log_likelihood(self, x=None, y=None):
         """
         Computes the variational lower bound of the true log marginal likelihood
         Eqn (9) in Titsias, Michalis K. "Variational Learning of Inducing Variables
@@ -150,7 +150,7 @@ class VFE(_InducingPointsGP):
         elbo += 0.5 * c.pow(2).sum()
         elbo += 0.5 * d_out * AAT.diag().sum()
 
-        return -elbo[0]
+        return elbo[0]
 
     def _predict(self, x_new: TensorType, diag=True, x=None):
         """
@@ -261,7 +261,7 @@ class SVGP(_InducingPointsGP):
         self.induced_output_mean, self.induced_output_chol_cov = self._init_posterior()
 
     @minibatch
-    def compute_loss(self, x, y):
+    def log_likelihood(self, x, y):
         """
         Variational bound.
         """
@@ -305,7 +305,7 @@ class SVGP(_InducingPointsGP):
             [torch.distributions.kl_divergence(qu, pu) for qu, pu in zip(qus, pus)]
         ).sum()
 
-        return -(marginal_log_likelihood - kl)
+        return marginal_log_likelihood - kl
 
     def _init_posterior(self):
         """

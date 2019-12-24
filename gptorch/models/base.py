@@ -98,24 +98,6 @@ class GPModel(Model):
     def output_dimension(self):
         return self.Y.shape[1]
 
-    def compute_loss(self, x=None, y=None):
-        """
-        Defines computation graph upon every call - PyTorch
-        This function must be implemented by all subclasses.
-
-        :param x: provide the training inputs on which the loss will be computed.
-            If not provided, default to self.X,
-        :param y: provide the training outputs on which the loss will be computed.
-            If not provided, default to self.Y
-        """
-        raise NotImplementedError
-
-    # def forward(self, *data):
-    #     # Builds computation graph for an objective, e.g. log marginal likelihood
-    #     # Responds to the NotImplementedError in super class: torch.nn.Module
-    #     # data usually includes observations and input
-    #     return self.compute_likelihood(*data)
-
     @staticmethod
     def _init_gaussian_likelihood(y) -> likelihoods.Gaussian:
         """
@@ -432,4 +414,6 @@ class GPModel(Model):
     def _data_to_cuda(self):
         self.X = self.X.cuda() 
         self.Y = self.Y.cuda()
-    
+
+    def _loss(self, *args, **kwargs):
+        return -(self.log_likelihood(*args, **kwargs) + self.log_prior())

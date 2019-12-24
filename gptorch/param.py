@@ -21,18 +21,30 @@ class Param(torch.nn.Parameter):
     """
 
     def __new__(cls, data=None, requires_grad=True, transform=None, prior=None):
-        transform = ComposeTransform([]) if transform is None else transform
+        transform = Param._validate_transform(transform)
         data = transform.inv(data)
         return super().__new__(cls, data, requires_grad=requires_grad)
 
-    def __init__(self, data, requires_grad=True, transform=None):
+    def __init__(self, data, requires_grad=True, transform=None, prior=None):
         super().__init__()
-        transform = ComposeTransform([]) if transform is None else transform
+        transform = Param._validate_transform(transform)
         self._transform = transform
-        self.prior = None
+        self.prior = prior
 
     def transform(self):
         return self._transform(self)
 
     def __repr__(self):
         return "Parameter containing:" + self.data.__repr__()
+
+    @staticmethod
+    def _validate_transform(t):
+        """
+        Ensure that the provided transform can be evaluated.
+
+        :param t: The transform to be validated
+        
+        :return: (torch.distributions.Transform) a valid transform.
+        """
+
+        return ComposeTransform([]) if t is None else t

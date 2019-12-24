@@ -110,7 +110,7 @@ class Model(torch.nn.Module):
                 param.grad.data.zero_()
 
         # 2) Compute
-        loss = self.compute_loss()
+        loss = self.loss()
         loss.backward()
 
         # 3) Return as the proper numpy types
@@ -128,7 +128,7 @@ class Model(torch.nn.Module):
             # self._previous_x = x  # store the last known good value
             print("Warning: inf or nan in gradient: replacing with zeros")
             return (
-                loss.item().astype(np.float64),
+                loss.item(),
                 np.where(grad_isfinite, grad, 0.0).astype(np.float64),
             )
 
@@ -155,16 +155,46 @@ class Model(torch.nn.Module):
                     "Unresolved issues with expanding numpy arrays"
                 )
 
-    def loss(self, *args):
+    def log_prior(self):
+        """
+        Compute the log prior of the model
+
+        Searches through all of the model's parameters and evaluates the 
+        log-probability on everything that has a prior.
+
+        :return: (TensorType) The log-prior
+        """
+
+        log_prior = 0.0
+        for param in self.parameters():
+            if hasattr(param, "prior") and param.prior is not None:
+                if hasattr(param, "transform") and param.transform is not None:
+                    val = param.transform()
+                else:
+                    val = param.data
+                log_prior += param.prior.log_prob(val).sum()
+
+        return log_prior
+
+    def loss(self, *loss_args, params=None, **loss_kwargs):
         """
         Loss, given args to be expanded into the model.
 
-        Args:
-            args (pointer to a tuple of TensorTypes):
-            (Get from self.extract_params())
+        :param params: The state of the module.  See `.extract_params()`. If 
+        provided, the model state is updated before evaluating the loss.
+        :type params: tuple of gptorch.util.TensorType objects
+        :param loss_args: arguments to pass to the child class's `._loss()` 
+        method.
+        :type loss_args: tuple
+        :param loss_kwargs: Keyword arguments to pass to the child class's 
+        `._loss()` method.
+        :type loss_kwargs: dict
         """
-        self.expand_params(*args)
-        return self.compute_loss()
+
+        if params is not None:
+            self.expand_params(*params)
+        
+        return self._loss(*loss_args, **loss_kwargs)
 
     def gradcheck(self, eps=1e-6, atol=1e-5, rtol=1e-3, verbose=False):
         """
@@ -185,3 +215,6 @@ class Model(torch.nn.Module):
         return gradcheck(
             self.loss, self.extract_params(), eps=eps, atol=atol, rtol=rtol
         )
+
+    def _loss(self, *args, **kwargs):
+        raise NotImplementedError("Implement loss function")

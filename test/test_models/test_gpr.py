@@ -33,29 +33,29 @@ class TestGPR(object):
         # init w/ a mean function:
         GPR(x, y, kern, mean_function=torch.nn.Linear(dx, dy))
 
-    def test_compute_loss(self):
+    def test_loss(self):
         model, x, y = self._get_model()
         n = x.shape[0]
 
-        loss = model.compute_loss()
+        loss = model.loss()
         assert isinstance(loss, torch.Tensor)
         assert loss.ndimension() == 1  # TODO change this...
 
         # Test ability to specify x and y
-        loss_xy = model.compute_loss(x=TensorType(x), y=TensorType(y))
+        loss_xy = model.loss(x=TensorType(x), y=TensorType(y))
         assert isinstance(loss_xy, torch.Tensor)
         assert loss_xy.item() == loss.item()
 
         with pytest.raises(ValueError):
             # Size mismatch
-            model.compute_loss(x=TensorType(x[:n // 2]))
+            model.loss(x=TensorType(x[:n // 2]))
 
     @needs_cuda
     def test_compute_loss_cuda(self):
         model = self._get_model()[0]
         model.cuda()
 
-        loss = model.compute_loss()
+        loss = model.loss()
         assert loss.is_cuda
 
     def test_predict(self):

@@ -1,10 +1,4 @@
-Current version on PyPI: 0.2.2
-
-# 0.2.3:
-* Fix gradient-shunting behavior caused by `torch.clamp()` used in `util.squared_distance()`
-
-## Authors
-* [Steven Atkinson](https://github.com/sdatkinson)
+Current version on PyPI: 0.2.3
 
 # 0.3.0:
 
@@ -17,6 +11,10 @@ Current version on PyPI: 0.2.2
 * Remove `util.tensor_type()`
 * Remove `util.KL_Gaussian()`
 * Remove `util.gammaln()`
+* GPModel method `.loss()` generally replaces `.compute_loss()`.
+* `.compute_loss()` methods in models generally renamed to `.log_likelihood()` 
+  and signs flipped to reflect the fact that the loss is generally the negative
+  LL.
 
 ## Changes not breaking backward compatibility
 * GPR, VFE: Allow specifying training set on .compute_loss() with x, y kwargs
@@ -24,3 +22,4 @@ Current version on PyPI: 0.2.2
 * GPU supported with .cuda()
 * [TODO] Eliminate GPModel.evaluate()
 * Don't print inducing inputs on sparse GP initialization
+* Suport for priors in `gptorch.model.Model`s
