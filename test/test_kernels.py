@@ -175,7 +175,7 @@ class TestRbf(ARD):
         super().setup_class(kernels.Rbf)
 
 
-class TestPeriodic(ARD, TestCase):
+class TestPeriodic(ARD):
     @classmethod
     def setup_class(cls):
         super().setup_class(kernels.Periodic)
