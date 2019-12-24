@@ -407,55 +407,6 @@ class GPModel(Model):
         )
         return samp
 
-    # TODO: need more thought on this interface
-    # convert the np operations into tensor ops
-    def evaluate(self, x_test, y_test, metric="NLML"):
-        """
-        Evaluate the model using various metrics, including:
-        - SMSE: Standardized Mean Squared Error
-        - RMSE: Rooted Mean Squared Error
-        - MSLL: Mean Standardized Log Loss
-        - NLML: Negative Log Marginal Likelihood
-        Args:
-            x_test (numpy.ndarray): test input
-            y_test (numpy.ndarray): test observations
-            metric (string, optional): name for the metric, chosen from the list
-                above.
-        Returns:
-            value of the metric
-        """
-
-        y_pred_mean, y_pred_var = self.predict_y(x_test)
-        y_pred_mean, y_pred_var = y_pred_mean.data.numpy(), y_pred_var.data.numpy()
-
-        if metric == "SMSE":
-            return (
-                np.power(y_pred_mean - y_test, 2).sum() / y_test.shape[0] / y_test.var()
-            )
-        elif metric == "RMSE":
-            return np.sqrt(np.power(y_pred_mean - y_test, 2).sum() / y_test.shape[0])
-        elif metric == "MSLL":
-            # single output dimension
-            # predictions for each independent output dimension are the same
-            # fitting training data with trivial Guassian
-            y_train = self.Y.data.numpy()
-            m0 = y_train.mean()
-            S0 = y_train.var()
-            msll = 0.5 * np.mean(
-                np.log(2 * np.pi * y_pred_var)
-                + np.power(y_pred_mean - y_test, 2) / y_pred_var
-            ) - 0.5 * np.mean(np.log(2 * np.pi * S0) + np.power(y_test - m0, 2) / S0)
-            # 0.5 * (y_test.shape[0] * np.log(2 * np.pi * S0) + \
-            # np.sum(np.power(y_test - m0, 2) / S0))
-            return msll
-        elif metric == "NLML":
-            return self.compute_loss().data.numpy()
-        else:
-            raise Exception(
-                "No such metric are supported currently, "
-                + "select one of the following: SMSE, RSME, MSLL, NLML."
-            )
-
     def cuda(self):
         """
         Since a GP model "is" its data, we need to make sure that the data make
