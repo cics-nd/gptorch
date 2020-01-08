@@ -236,7 +236,7 @@ class GPModel(Model):
                 for idx in range(max_iter):
                     self.optimizer.zero_grad()
                     # forward
-                    loss = self.compute_loss()
+                    loss = self.loss()
                     # backward
                     loss.backward()
                     self.optimizer.step()
@@ -248,7 +248,7 @@ class GPModel(Model):
 
                     def closure():
                         self.optimizer.zero_grad()
-                        loss = self.compute_loss()
+                        loss = self.loss()
                         loss.backward()
                         return loss
 
@@ -260,7 +260,7 @@ class GPModel(Model):
                 for idx in range(max_iter):
                     self.optimizer.zero_grad()
                     # forward
-                    loss = self.compute_loss()
+                    loss = self.loss()
                     # backward
                     loss.backward()
                     self.optimizer.step()
@@ -272,7 +272,7 @@ class GPModel(Model):
 
                     def closure():
                         self.optimizer.zero_grad()
-                        loss = self.compute_loss()
+                        loss = self.loss()
                         loss.backward()
                         return loss
 
