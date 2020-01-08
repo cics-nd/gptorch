@@ -47,6 +47,11 @@ class TestGPModel(object):
         assert not gp.X.is_cuda
         assert not gp.Y.is_cuda
 
+    def test_optimize(self):
+        gp = self._get_model()
+        gp.optimize(max_iter=2)
+        gp.optimize(method="L-BFGS-B", max_iter=2)
+
     def test_predict_f(self):
         self._predict_fy("predict_f")
 
