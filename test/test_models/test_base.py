@@ -51,6 +51,9 @@ class TestGPModel(object):
         gp = self._get_model()
         gp.optimize(max_iter=2)
         gp.optimize(method="L-BFGS-B", max_iter=2)
+        gp.optimize(max_iter=2, verbose=False)
+        gp.optimize(method="LBFGS", max_iter=2)
+        gp.optimize(method="LBFGS", max_iter=2, verbose=False)
 
     def test_predict_f(self):
         self._predict_fy("predict_f")
