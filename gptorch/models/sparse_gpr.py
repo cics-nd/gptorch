@@ -10,6 +10,7 @@ from __future__ import absolute_import
 import torch
 import numpy as np
 from torch.utils.data import TensorDataset, DataLoader
+from torch import distributions
 from torch.distributions.transforms import LowerCholeskyTransform
 
 from ..model import Param
@@ -17,6 +18,7 @@ from ..functions import cholesky, trtrs
 from ..mean_functions import Zero
 from ..likelihoods import Gaussian
 from ..util import TensorType, torch_dtype, as_tensor, kmeans_centers
+from ..util import LazyMultivariateNormal
 from .gpr import GPR
 from .base import GPModel
 
@@ -57,8 +59,9 @@ class _InducingPointsGP(GPModel):
         if inducing_points is None:
             if num_inducing_points is None:
                 num_inducing_points = np.clip(x.shape[0] // 10, 1, 100)
-            inducing_points = kmeans_centers(x, num_inducing_points, 
-                perturb_if_fail=True)
+            inducing_points = kmeans_centers(
+                x, num_inducing_points, perturb_if_fail=True
+            )
             # indices = np.random.permutation(len(x))[:num_inducing_points]
             # inducing_points = TensorType(x[indices])
 
@@ -139,9 +142,7 @@ class VFE(_InducingPointsGP):
         # Evidence lower bound
         elbo = TensorType([-0.5 * d_out * num_data * np.log(2 * np.pi)]).to(c.device)
         elbo -= d_out * LB.diag().log().sum()
-        elbo -= (
-            0.5 * d_out * num_data * self.likelihood.variance.transform().log()
-        )
+        elbo -= 0.5 * d_out * num_data * self.likelihood.variance.transform().log()
         elbo -= (
             0.5
             * (err.pow(2).sum() + d_out * Kff_diag.sum())
@@ -189,10 +190,10 @@ class VFE(_InducingPointsGP):
                 - tmp1.pow(2).sum(0).squeeze()
                 + tmp2.pow(2).sum(0).squeeze()
             )[:, None].expand_as(mean)
+            return distributions.Normal(mean, var.sqrt())
         else:
-            var = self.kernel.K(x_new) + tmp2.t() @ tmp2 - tmp1.t() @ tmp1
-
-        return mean, var
+            cov = self.kernel.K(x_new) + tmp2.t() @ tmp2 - tmp1.t() @ tmp1
+            return LazyMultivariateNormal(mean.T, cov)
 
 
 def minibatch(loss_func):
@@ -272,15 +273,8 @@ class SVGP(_InducingPointsGP):
         chol_kuu = cholesky(self.kernel.K(self.Z))
 
         # Marginal posterior q(f)'s mean & variance
-        f_mean, f_var = self._predict(x, diag=True, chol_kuu=chol_kuu)
-        marginal_log_likelihood = torch.stack(
-            [
-                self.likelihood.propagate_log(
-                    torch.distributions.Normal(loc_i, torch.sqrt(v_i)), yi
-                )
-                for loc_i, v_i, yi in zip(f_mean.t(), f_var.t(), y.t())
-            ]
-        ).sum()
+        pf = self._predict(x, diag=True, chol_kuu=chol_kuu)
+        marginal_log_likelihood = self.likelihood.marginal_log_likelihood(pf, y)
         # Account for size of minibatch relative to the total dataset size:
         marginal_log_likelihood *= self.num_data / x.shape[0]
 
@@ -370,12 +364,12 @@ class SVGP(_InducingPointsGP):
         gamma = alpha @ beta
 
         if diag:
-            f_cov = (
+            f_var = (
                 self.kernel.Kdiag(x_new)
                 - torch.sum(alpha ** 2, dim=1)
                 + torch.sum(gamma ** 2, dim=1)
             )[:, None].expand_as(f_mean)
+            return distributions.Normal(f_mean, f_var.sqrt())
         else:
             f_cov = self.kernel.K(x_new) - alpha @ alpha.t() + gamma @ gamma.t()
-
-        return f_mean, f_cov
+            return LazyMultivariateNormal(f_mean.T, f_cov)

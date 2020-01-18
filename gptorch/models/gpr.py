@@ -14,7 +14,7 @@ from .. import kernels
 from ..model import Param
 from .. import likelihoods
 from ..functions import cholesky, inverse, lt_log_determinant, trtrs
-from ..util import TensorType
+from ..util import TensorType, LazyMultivariateNormal
 from .base import GPModel
 
 
@@ -41,7 +41,7 @@ class GPR(GPModel):
                 for computing the parameterized mean function.
             likelihood (Likelihood): A likelihood model
         """
-        
+
         super().__init__(x, y, kernel, likelihood, mean_function, name)
 
     def log_likelihood(self, x=None, y=None):
@@ -56,15 +56,8 @@ class GPR(GPModel):
         if not x.shape[0] == y.shape[0]:
             raise ValueError("X and Y must have same # data.")
 
-        num_input, dim_output = y.shape
-
-        L = cholesky(self._compute_kyy(x=x))
-        alpha = trtrs(y - self.mean_function(x), L)
-        const = TensorType([-0.5 * dim_output * num_input * np.log(2 * np.pi)])
-        if alpha.is_cuda:
-            const = const.cuda()  # TODO cache this?
-        loglik = -0.5 * alpha.pow(2).sum() - dim_output * lt_log_determinant(L) + const
-        return loglik
+        pf = LazyMultivariateNormal(self.mean_function(x).T, self.kernel.K(x))
+        return self.likelihood.log_marginal_likelihood(pf, y)
 
     def _compute_kyy(self, x=None):
         """
@@ -95,6 +88,9 @@ class GPR(GPModel):
         where F* are points on the GP at x_new, Y are observations at the
         input X of the training data.
         :param x_new: test inputs; should be two-dimensional
+
+        :return: either a `torch.distributions.Normal` or 
+        `LazyMultivariateNormal` depending upon `diag`.
         """
 
         x = x if x is not None else self.X
@@ -107,11 +103,10 @@ class GPR(GPModel):
         mean_f = A.t() @ V + self.mean_function(x_new)
 
         if diag:
-            var_f = (
-                self.kernel.Kdiag(x_new) - 
-                (A * A).sum(0)
-            )[:, None].expand_as(mean_f)
+            var_f = (self.kernel.Kdiag(x_new) - (A * A).sum(0))[:, None].expand_as(
+                mean_f
+            )
+            return torch.distributions.Normal(mean_f, var_f.sqrt())
         else:
-            var_f = self.kernel.K(x_new) - A.t() @ A
-
-        return mean_f, var_f
+            cov_f = self.kernel.K(x_new) - A.t() @ A
+            return LazyMultivariateNormal(mean_f.T, cov_f)

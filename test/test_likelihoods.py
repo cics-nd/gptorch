@@ -6,13 +6,13 @@
 Tests for likelihood classes
 """
 
-import torch as th
-from torch.autograd import Variable
+import torch
+from torch import distributions
 import pytest
 
 from gptorch import likelihoods
 import gptorch.model
-from gptorch.util import TensorType
+from gptorch.util import TensorType, torch_dtype, LazyMultivariateNormal
 
 
 class TestGaussian(object):
@@ -42,76 +42,90 @@ class TestGaussian(object):
             self._expected_likelihood_variance
         )
 
-    def test_logp(self):
+    def test_forward(self):
+        """
+        Ensure that everything gets dispatched and evaluates
+        """
+
+        lik = self._standard_likelihood()
+        lik(TensorType([0.4]))
+        lik(distributions.Normal(TensorType([0.8]), TensorType([1.2])))
+        lik(LazyMultivariateNormal(TensorType([[1.2, 3.0]]), torch.eye(2)))
+
+    def test_forward_tensor(self):
+        lik = self._standard_likelihood()
+        f = TensorType([1.2, 0.8])
+        with torch.no_grad():
+            py = lik._forward_tensor(f)
+
+            assert isinstance(py, distributions.Normal)
+            assert py.loc.allclose(f)
+            assert all(
+                [vi.numpy() == lik.variance.transform().numpy() for vi in py.variance]
+            )
+
+    def test_forward_normal(self):
+        lik = self._standard_likelihood()
+        mean_f, var_f = TensorType([1.2, 0.8]), TensorType([0.2, 0.3])
+        scale_f = var_f.sqrt()
+        pf = distributions.Normal(mean_f, scale_f)
+        with torch.no_grad():
+            py = lik._forward_normal(pf)
+
+            assert isinstance(py, distributions.Normal)
+            assert py.loc.allclose(mean_f)
+
+            expected_variance = var_f + lik.variance.transform()
+            assert py.variance.allclose(expected_variance)
+
+    def test_forward_multivariate_normal(self):
+        lik = self._standard_likelihood()
+        mean_f = TensorType([[1.2, 0.8]])
+        cov_f = TensorType([0.2, 0.3]).diag()[None, :, :]
+        pf = LazyMultivariateNormal(mean_f, cov_f)
+        with torch.no_grad():
+            py = lik._forward_multivariate_normal(pf)
+
+            assert isinstance(py, distributions.MultivariateNormal)
+            assert py.loc.allclose(mean_f)
+
+            expected_cov = cov_f + lik.variance.transform() * torch.eye(
+                2, 2, dtype=torch_dtype
+            )
+            assert py.covariance_matrix.allclose(expected_cov)
+
+    def test_log_marginal_likelihood(self):
         """
         Log-density
         """
         lik = self._standard_likelihood()
-        mean = Variable(TensorType([0.0]))
-        target = Variable(TensorType([0.1]))
-        expected_logp = 0.8836465597893728
+        mean = TensorType([0.0])
+        target = TensorType([0.1])
+        expected_lml = 0.8836465597893728
 
         # API
-        logp = lik.logp(mean, target)
-        assert isinstance(logp, Variable)
+        lml = lik.log_marginal_likelihood(mean, target)
+        assert isinstance(lml, TensorType)
 
         # Value
-        assert logp.data.numpy() == pytest.approx(expected_logp)
+        assert lml.detach().numpy() == pytest.approx(expected_lml)
 
-    def test_predict_mean_variance(self):
-        """
-        Test propagation of diagonal Gaussian through the likelihood density.
-        """
+        # perhaps check against other .forward()s?
+
+    def test_marginal_log_likelihood(self):
         lik = self._standard_likelihood()
-        input_mean = Variable(TensorType([0.0]))
-        input_variance = Variable(TensorType([1.0]))
-        expected_output_mean = input_mean
-        expected_output_variance = input_variance + self._expected_likelihood_variance
+        pf = distributions.Normal(
+            TensorType([[-0.2], [1.0]]), TensorType([[0.1], [0.2]])
+        )
+        targets = TensorType([[-0.1], [0.9]])
+        expected_mll = -0.73270688  # Snapshot 2020-01-18
 
         # API
-        output_mean, output_variance = lik.predict_mean_variance(
-            input_mean, input_variance
-        )
-        assert isinstance(output_mean, Variable)
-        assert isinstance(output_variance, Variable)
+        mll = lik.marginal_log_likelihood(pf, targets)
+        assert isinstance(mll, TensorType)
 
         # Value
-        assert output_mean.data.numpy() == expected_output_mean.data.numpy()
-        assert output_variance.data.numpy() == pytest.approx(
-            expected_output_variance.data.numpy()
-        )
-
-    def test_predict_mean_covariance(self):
-        """
-        Test propagation of full Gaussian through the likelihood density.
-        """
-        lik = self._standard_likelihood()
-        input_mean = Variable(TensorType([0.0, 1.0, 2.1]))
-        input_covariance = Variable(
-            TensorType([[1.0, 0.5, 0.2], [0.5, 1.0, 0.5], [0.2, 0.5, 1.0]])
-        )
-        expected_output_mean = input_mean
-        # Ugh, sorry about this.  Will cleanup when we move PyTorch forward!
-        expected_output_covariance = (
-            input_covariance
-            + Variable(TensorType([self._expected_likelihood_variance]))
-            .expand_as(input_covariance)
-            .diag()
-            .diag()
-        )
-
-        # API
-        output_mean, output_covariance = lik.predict_mean_covariance(
-            input_mean, input_covariance
-        )
-        assert isinstance(output_mean, Variable)
-        assert isinstance(output_covariance, Variable)
-
-        # Value
-        assert all(output_mean.data.numpy() == expected_output_mean.data.numpy())
-        assert output_covariance.data.numpy() == pytest.approx(
-            expected_output_covariance.data.numpy()
-        )
+        assert mll.detach().numpy() == pytest.approx(expected_mll)
 
     @property
     def _expected_likelihood_variance(self):

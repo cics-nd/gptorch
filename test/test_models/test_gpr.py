@@ -11,7 +11,7 @@ import torch
 
 from gptorch.models import GPR
 from gptorch.kernels import Rbf
-from gptorch.util import torch_dtype, TensorType
+from gptorch.util import torch_dtype, TensorType, LazyMultivariateNormal
 
 base_path = os.path.join(os.path.dirname(__file__), "..", "..")
 if not base_path in sys.path:
@@ -39,7 +39,7 @@ class TestGPR(object):
 
         loss = model.loss()
         assert isinstance(loss, torch.Tensor)
-        assert loss.ndimension() == 1  # TODO change this...
+        assert loss.ndimension() == 0
 
         # Test ability to specify x and y
         loss_xy = model.loss(x=TensorType(x), y=TensorType(y))
@@ -48,7 +48,7 @@ class TestGPR(object):
 
         with pytest.raises(ValueError):
             # Size mismatch
-            model.loss(x=TensorType(x[:n // 2]))
+            model.loss(x=TensorType(x[: n // 2]))
 
     @needs_cuda
     def test_compute_loss_cuda(self):
@@ -65,11 +65,15 @@ class TestGPR(object):
         model = GPR(x, y, kern)
 
         x_test = torch.randn(n_test, dx)
-        mu_var, var = model._predict(x_test)
+        pf_diag = model._predict(x_test)
+        assert isinstance(pf_diag, torch.distributions.Normal)
+        mu_var, var = pf_diag.loc, pf_diag.variance
         assert all([e == a for e, a in zip(mu_var.shape, (n_test, dy))])
         assert all([e == a for e, a in zip(var.shape, (n_test, dy))])
 
-        mu_cov, cov = model._predict(x_test, diag=False)
+        pf_full = model._predict(x_test, diag=False)
+        assert isinstance(pf_full, LazyMultivariateNormal)
+        mu_cov, cov = pf_full.loc.T, pf_full.covariance_matrix
         assert all([e == a for e, a in zip(mu_cov.shape, (n_test, dy))])
         assert all([e == a for e, a in zip(cov.shape, (n_test, n_test))])
 
@@ -82,7 +86,8 @@ class TestGPR(object):
         model.cuda()
 
         x_test = torch.randn(n_test, dx, dtype=torch_dtype).cuda()
-        for t in model._predict(x_test):  # mean, variance
+        pf = model._predict(x_test)
+        for t in [pf.loc, pf.variance]:  # mean, variance
             assert t.is_cuda
 
     @staticmethod

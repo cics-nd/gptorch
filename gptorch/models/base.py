@@ -15,7 +15,7 @@ from .. import likelihoods
 from ..functions import cholesky
 from ..mean_functions import Zero
 from ..model import Model
-from ..util import TensorType, as_tensor, torch_dtype
+from ..util import TensorType, as_tensor, torch_dtype, LazyMultivariateNormal
 
 
 def input_as_tensor(predict_func):
@@ -74,10 +74,14 @@ class GPModel(Model):
 
         super().__init__()
         self.kernel = kernel
-        self.likelihood = likelihood if likelihood is not None else \
-            GPModel._init_gaussian_likelihood(y)
-        self.mean_function = mean_function if mean_function is not None else \
-            Zero(y.shape[1])
+        self.likelihood = (
+            likelihood
+            if likelihood is not None
+            else GPModel._init_gaussian_likelihood(y)
+        )
+        self.mean_function = (
+            mean_function if mean_function is not None else Zero(y.shape[1])
+        )
 
         x, y = as_tensor(x), as_tensor(y)
         x.requires_grad_(False)
@@ -108,8 +112,7 @@ class GPModel(Model):
         """
         return likelihoods.Gaussian(variance=0.001 * y.var())
 
-    def optimize(self, method='Adam', max_iter=2000, verbose=True,
-            learning_rate=None):
+    def optimize(self, method="Adam", max_iter=2000, verbose=True, learning_rate=None):
         """
         Optimizes the model by minimizing the loss (from :method:) w.r.t.
         model parameters.
@@ -137,7 +140,7 @@ class GPModel(Model):
             "Adamax": 0.002,
             "ASGD": 0.01,
             "RMSprop": 0.01,
-            "Rprop": 0.01
+            "Rprop": 0.01,
         }
         if learning_rate is None and method in default_learning_rates:
             learning_rate = default_learning_rates[method]
@@ -164,8 +167,7 @@ class GPModel(Model):
             )
         elif method == "Adadelta":
             self.optimizer = torch.optim.Adadelta(
-                parameters, lr=learning_rate, rho=0.9, eps=1e-06, 
-                weight_decay=0.00001
+                parameters, lr=learning_rate, rho=0.9, eps=1e-06, weight_decay=0.00001
             )
         elif method == "Adagrad":
             self.optimizer = torch.optim.Adagrad(
@@ -173,7 +175,11 @@ class GPModel(Model):
             )
         elif method == "Adamax":
             self.optimizer = torch.optim.Adamax(
-                parameters, lr=learning_rate, betas=(0.9, 0.999), eps=1e-08, weight_decay=0
+                parameters,
+                lr=learning_rate,
+                betas=(0.9, 0.999),
+                eps=1e-08,
+                weight_decay=0,
             )
         elif method == "ASGD":
             self.optimizer = torch.optim.ASGD(
@@ -338,56 +344,55 @@ class GPModel(Model):
     @input_as_tensor
     def predict_f(self, input_new, diag=True, **kwargs):
         """
-        Computes the mean and variance of the latent function at input_new
-        return the diagonal of the cov matrix
-        Args:
-            input_new (numpy.ndarray or TensorType)
+        Computes the mean and (co)variance of the latent function at input_new.
+
+        :param input_new: (numpy.ndarray or TensorType) input test points
+
+        :return: 
+            * mean [n x dy]
+            * variance [n x dy] (if diag=True) or covariance [dy x n x n]
         """
-        return self._predict(input_new, diag=diag, **kwargs)
+        pf = self._predict(input_new, diag=diag, **kwargs)
+        return (pf.loc, pf.variance) if diag else (pf.loc.T, pf.covariance_matrix)
 
     @input_as_tensor
     def predict_y(self, input_new, diag=True, **kwargs):
         """
-        Computes the mean and variance of observations at new inputs
-        Args:
-            input_new (numpy.ndarray)
-        """
-        mean_f, cov_f = self._predict(input_new, diag=diag, **kwargs)
+        Computes the mean and (co)variance of the observed outputs at input_new.
 
-        if diag:
-            return self.likelihood.predict_mean_variance(mean_f, cov_f)
-        else:
-            return self.likelihood.predict_mean_covariance(mean_f, cov_f)
+        :param input_new: (numpy.ndarray or TensorType) input test points
+
+        :return: 
+            * mean [n x dy]
+            * variance [n x dy] (if diag=True) or covariance [dy x n x n]
+        """
+
+        if not isinstance(self.likelihood, likelihoods.Gaussian):
+            raise TypeError("Require Gaussian likelihood to use .predict_y()")
+        py = self.likelihood(self._predict(input_new, diag=diag, **kwargs))
+        return (py.loc, py.variance) if diag else (py.loc.T, py.covariance_matrix)
 
     @input_as_tensor
     def predict_f_samples(self, input_new, n_samples=1, **kwargs):
         """
-        Return [n_samp x n_test x d_y] matrix of samples
         :param input_new:
         :param n_samples:
-        :return:
+        :return: [n_samples x n_test x d_y] matrix of samples
         """
-        mu, sigma = self.predict_f(input_new, diag=False, **kwargs)
-        chol_s = cholesky(sigma)
-        samp = mu + chol_s[None, :, :] @ torch.randn(
-            n_samples, *mu.shape, dtype=torch_dtype, device=chol_s.device
+        return self._samples(
+            *self.predict_f(input_new, diag=False, **kwargs), n_samples
         )
-        return samp
 
     @input_as_tensor
     def predict_y_samples(self, input_new, n_samples=1, **kwargs):
         """
-        Return [n_samp x n_test x d_y] matrix of samples
         :param input_new:
         :param n_samples:
-        :return:
+        :return: [n_samples x n_test x d_y] matrix of samples
         """
-        mu, sigma = self.predict_y(input_new, diag=False, **kwargs)
-        chol_s = cholesky(sigma)
-        samp = mu + chol_s[None, :, :] @ torch.randn(
-            n_samples, *mu.shape, dtype=torch_dtype, device=chol_s.device
+        return self._samples(
+            *self.predict_y(input_new, diag=False, **kwargs), n_samples
         )
-        return samp
 
     def cuda(self):
         """
@@ -412,8 +417,28 @@ class GPModel(Model):
         self.Y = self.Y.cpu()
 
     def _data_to_cuda(self):
-        self.X = self.X.cuda() 
+        self.X = self.X.cuda()
         self.Y = self.Y.cuda()
 
     def _loss(self, *args, **kwargs):
         return -(self.log_likelihood(*args, **kwargs) + self.log_prior())
+
+    @staticmethod
+    def _samples(mu: TensorType, cov: TensorType, n_samples: int):
+        """
+        :param mu: [n x dy]
+        :param cov: [dy x n x n]
+
+        :return: [n_samples x n x dy]
+        """
+
+        chol_s = cholesky(cov)  # DY x N* x N*
+        return (
+            mu
+            + (
+                chol_s
+                @ torch.randn(
+                    *mu.T.shape, n_samples, dtype=torch_dtype, device=chol_s.device
+                )
+            ).T
+        )  # Transpose reverses all dimension, so [DY x N x B] to [B x N x DY]

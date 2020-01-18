@@ -14,6 +14,7 @@ from gptorch.mean_functions import Zero
 from gptorch.util import TensorType
 from gptorch.kernels import Rbf
 from gptorch.models import GPR
+from gptorch.util import torch_dtype
 
 base_path = os.path.join(os.path.dirname(__file__), "..", "..")
 if not base_path in sys.path:
@@ -80,6 +81,23 @@ class TestGPModel(object):
     def test_predict_y_samples_cuda(self):
         self._predict_fy_samples_cuda("predict_y_samples")
 
+    def test_samples(self):
+        """
+        GPModel._samples()
+        """
+
+        def _trial(b, n, dy):
+            mu = torch.zeros(n, dy, dtype=torch_dtype)
+            cov = torch.stack([torch.eye(n, dtype=torch_dtype) for _ in range(dy)])
+            samples = GPModel._samples(mu, cov, b)
+            assert isinstance(samples, torch.Tensor)
+            assert samples.shape == (b, n, dy)
+
+        _trial(10, 5, 3)
+        _trial(1, 5, 3)
+        _trial(10, 1, 1)
+        _trial(1, 1, 1)
+
     def _predict_fy(self, attr):
         """
         attr='predict_f' or 'predict_y'
@@ -137,7 +155,7 @@ class TestGPModel(object):
         """
 
         # TODO mock a GPModel?  Using GPR for the moment.
-        n, dx, dy = 5, 3, 2
+        n, dx, dy = 5, 3, 7
         x, y = np.random.randn(n, dx), np.random.randn(n, dy)
         kern = Rbf(dx, ARD=True)
         gp = GPR(x, y, kern)
@@ -163,7 +181,7 @@ class TestGPModel(object):
         assert samples_torch.shape == (1, n_test, dy)
 
     def _predict_fy_samples_cuda(self, attr):
-        
+
         n, dx, dy = 5, 3, 2
         x, y = np.random.randn(n, dx), np.random.randn(n, dy)
         kern = Rbf(dx, ARD=True)

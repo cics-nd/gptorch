@@ -12,6 +12,17 @@ TensorType = torch.DoubleTensor
 torch_dtype = torch.double
 
 
+class LazyMultivariateNormal(object):
+    """
+    Holds the mean & covariance of a multivariate normal.
+    Use this when you don't want torch to automatically compute the scale_tril 
+    (requires a Cholesky, which can be costly!)
+    """
+
+    def __init__(self, loc, covariance_matrix):
+        self.loc, self.covariance_matrix = loc, covariance_matrix
+
+
 def as_tensor(x):
     """
     Convert a numpy matrix into a Tensor.
@@ -31,8 +42,7 @@ def as_tensor(x):
         raise TypeError("Unsupported type {}".format(type(x)))
 
 
-def kmeans_centers(x: np.ndarray, k: int, perturb_if_fail: bool=False) -> \
-        np.ndarray:
+def kmeans_centers(x: np.ndarray, k: int, perturb_if_fail: bool = False) -> np.ndarray:
     """
     Use k-means clustering and find the centers of the clusters.
     :param x: The data
@@ -81,7 +91,7 @@ def squared_distance(x1: TensorType, x2: TensorType = None) -> TensorType:
         return squared_distance(x1, x1)
     x1s = x1.pow(2).sum(1, keepdim=True)
     x2s = x2.pow(2).sum(1, keepdim=True)
-    r2 = x1s + x2s.t() -2.0 * x1 @ x2.t()
+    r2 = x1s + x2s.t() - 2.0 * x1 @ x2.t()
     # Prevent negative squared distances using torch.clamp
     # NOTE: Clamping is for numerics.
     # This use of .detach() is to avoid breaking the gradient flow.
