@@ -12,7 +12,7 @@ import numpy as np
 
 torch_version = [int(s) for s in torch.__version__.split(".")]
 _potri = torch.cholesky_inverse if torch_version >= [1, 1, 0] else torch.potri
-    
+
 
 TRIANGULAR_SOLVE = "triangular_solve" in dir(torch)
 
@@ -24,6 +24,17 @@ def jit_op(
     Attempt a potentially-unstable linear algebra operation on a matrix.
     If it fails, then try adding more and more jitter and try again...
     """
+
+    return (
+        _jit_op(op, x, max_tries, verbose)
+        if x.ndimension() <= 2
+        else torch.stack(
+            [jit_op(op, xi, max_tries=max_tries, verbose=verbose) for xi in x]
+        )
+    )
+
+
+def _jit_op(op, x, max_tries, verbose):
     jitter_size = x.diag().mean()
     try:
         return op(x)
