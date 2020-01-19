@@ -230,8 +230,8 @@ class SVGP(_InducingPointsGP):
 
     def __init__(
         self,
-        y,
         x,
+        y,
         kernel,
         num_inducing_points=None,
         inducing_points=None,
@@ -244,8 +244,8 @@ class SVGP(_InducingPointsGP):
             training.  If None, no minibatches are used.
         """
         super().__init__(
-            y,
             x,
+            y,
             kernel,
             num_inducing_points=num_inducing_points,
             inducing_points=inducing_points,
@@ -255,11 +255,16 @@ class SVGP(_InducingPointsGP):
         # assert batch_size is None, "Minibatching not supported yet."
         self.batch_size = batch_size
 
-        # Parameters for the Gaussian variational posterior over the induced
+        # Parameters for the (Gaussian) variational posterior over the induced
         # outputs.
         # Note: induced_output_mean does NOT include the contribution due to the
         # mean function.
-        self.induced_output_mean, self.induced_output_chol_cov = self._init_posterior()
+        self.induced_output_mean = Param(
+            torch.zeros(self.num_inducing, self.output_dimension, dtype=torch_dtype)
+        )
+        self.induced_output_chol_cov = Param(
+            cholesky(self.kernel.K(self.Z)), transform=LowerCholeskyTransform()
+        )
 
     @minibatch
     def log_likelihood(self, x, y):
@@ -284,49 +289,15 @@ class SVGP(_InducingPointsGP):
         # Each output dimension has its own Multivariate normal (different
         # means, shared covariance); the joint distribution is the product
         # across output dimensions.
-        qus = [
-            torch.distributions.MultivariateNormal(qu_i, scale_tril=qu_lc)
-            for qu_i in qu_mean.t()
-        ]
-        # Each dimension has its own prior as well due to the mean function
-        # Being potentially different for each output dimension.
-        pus = [
-            torch.distributions.MultivariateNormal(mi, scale_tril=chol_kuu)
-            for mi in mu_xu.t()
-        ]
-
-        kl = torch.stack(
-            [torch.distributions.kl_divergence(qu, pu) for qu, pu in zip(qus, pus)]
-        ).sum()
+        #
+        # Transpose means since MultivariateNormal assumes locs of shape [D x N]
+        # scale_tril is automatically broadcasted to [D x N x N]
+        kl = distributions.kl_divergence(
+            distributions.MultivariateNormal(qu_mean.T, scale_tril=qu_lc),
+            distributions.MultivariateNormal(mu_xu.T, scale_tril=chol_kuu),
+        )[0]
 
         return marginal_log_likelihood - kl
-
-    def _init_posterior(self):
-        """
-        Get an initial guess at the variational posterior over the induced 
-        outputs.
-
-        Just build a GP out of a few data and use its posterior.
-        This could be far worse than expected if the likelihood is non-Gaussian,
-        but we don't need this to be great--just good enough to get started.
-        """
-
-        i = np.random.permutation(self.num_data)[0 : min(self.num_data, 100)]
-        x, y = self.X[i].data.numpy(), self.Y[i].data.numpy()
-        # Likelihood needs to be Gaussian for exact inference in GPR
-        likelihood = (
-            self.likelihood
-            if isinstance(self.likelihood, Gaussian)
-            else Gaussian(variance=0.01 * y.var())
-        )
-        model = GPR(
-            x, y, self.kernel, mean_function=self.mean_function, likelihood=likelihood
-        )
-        mean, cov = model.predict_f(self.Z, diag=False)
-        mean -= self.mean_function(self.Z)
-        chol_cov = cholesky(cov)
-
-        return Param(mean), Param(chol_cov, transform=LowerCholeskyTransform())
 
     def _predict(self, x_new: TensorType, diag=True, chol_kuu=None, **kwargs):
         """
