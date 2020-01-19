@@ -15,6 +15,7 @@ The main three tasks that we do with these (conditional) distributions are:
 import abc
 from math import pi
 
+import numpy as np
 from torch.nn import Parameter
 import torch
 from torch import distributions
@@ -23,6 +24,7 @@ from .functions import cholesky
 from .model import Model, Param
 from .settings import DefaultPositiveTransform
 from .util import torch_dtype, TensorType, LazyMultivariateNormal
+from .util import gauss_hermite_quadrature
 
 
 class Likelihood(Model):
@@ -86,7 +88,7 @@ class Likelihood(Model):
         return (
             self._marginal_log_likelihood_methods[type(pf)](pf, targets)
             if type(pf) in self._marginal_log_likelihood_methods
-            else self._marginal_log_likelihood_monte_carlo(pf, targets)
+            else self._marginal_log_likelihood_sampled(pf, targets)
         )
 
     @abc.abstractmethod
@@ -112,13 +114,44 @@ class Likelihood(Model):
 
         raise NotImplementedError()
 
-    def _marginal_log_likelihood_monte_carlo(self, pf, targets, n=100):
+    def _marginal_log_likelihood_sampled(self, pf, targets, n=16):
+        quadrature_methods = {
+            distributions.Normal: self._marginal_log_likelihood_gauss_hermite
+        }
+
+        return (
+            quadrature_methods[type(pf)](pf, targets, n)
+            if type(pf) in quadrature_methods
+            else self._marginal_log_likelihood_monte_carlo(pf, targets, n)
+        )
+
+    def _marginal_log_likelihood_gauss_hermite(self, pf, targets, n):
+        """
+        Use 1D Gauss-hermite quadrature to accurately approximate the MLL.
+        """
+
+        rank = len(pf.batch_shape)
+
+        def func(x):
+            # Broadcast x (quadrature samples) to [n, 1, ..., 1]
+            #                                         \__rank_/
+            x = x.view(-1, *([1] * rank))
+            # Reduce (sum) along rank dimensions. Result is array of shape (n,).
+            return (
+                self(pf.loc[None] + pf.scale[None] * x)
+                .log_prob(targets)
+                .sum(dim=tuple([i for i in np.arange(1, rank + 1)]))  # (1,...,rank)
+            )
+
+        return gauss_hermite_quadrature(func, n, device=pf.loc.device)
+
+    def _marginal_log_likelihood_monte_carlo(self, pf, targets, n):
         """
         Monte Carlo fallback
         """
 
         return torch.stack(
-            [self(pf.sample()).log_prob(targets).sum() for _ in range(n)]
+            [self(pf.rsample()).log_prob(targets).sum() for _ in range(n)]
         ).mean()
 
 
@@ -265,7 +298,9 @@ class Binomial(Likelihood):
 
         self.n = n
         self.link = torch.nn.Sigmoid() if link is None else link
-        self._forward_methods.update({TensorType: self._forward_tensor})
+        self._forward_methods.update(
+            {TensorType: self._forward_tensor, torch.Tensor: self._forward_tensor}
+        )
 
     def _forward_tensor(self, f):
         return distributions.Binomial(self.n, probs=self.link(f))
