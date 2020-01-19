@@ -42,6 +42,18 @@ def as_tensor(x):
         raise TypeError("Unsupported type {}".format(type(x)))
 
 
+def gauss_hermite_quadrature(func, n, device="cpu"):
+    """
+    Approximate 
+    y = int N(x|0,1) f(x) dx
+    using Gauss-Hermite quadrature with n points
+    """
+
+    x, w = np.polynomial.hermite.hermgauss(n)
+    x, w = TensorType(x, device=device), TensorType(w / np.sqrt(np.pi), device=device)
+    return torch.dot(w, func(x))
+
+
 def kmeans_centers(x: np.ndarray, k: int, perturb_if_fail: bool = False) -> np.ndarray:
     """
     Use k-means clustering and find the centers of the clusters.

@@ -15,6 +15,27 @@ if not base_path in sys.path:
 from gptorch import util
 
 
+class TestGaussHermiteQuadrature(object):
+    def test_call(self):
+        answer = util.gauss_hermite_quadrature(lambda x: 0.0 * x + 2.0, 16)
+        assert isinstance(answer, torch.Tensor)
+        assert answer.ndimension() == 0
+
+    def test_relative(self):
+        answer_128 = util.gauss_hermite_quadrature(self._func, 128)
+        answer_129 = util.gauss_hermite_quadrature(self._func, 129)
+        assert answer_128.allclose(answer_129)
+
+    def test_absolute(self):
+        answer_128 = util.gauss_hermite_quadrature(self._func, 1)
+        expected_answer = torch.Tensor([2.3])[0]
+        assert answer_128.allclose(expected_answer)
+
+    @staticmethod
+    def _func(x):
+        return 0.0 * x + 2.3
+
+
 class TestSquaredDistance(object):
     """
     util.squared_distance
@@ -39,9 +60,15 @@ class TestSquaredDistance(object):
         x1, x2 = self._vals_1d()
 
         r2_actual = util.squared_distance(x1, x2)
-        r2_expected = util.TensorType([[0.0, 4.0, 16.0], [1.0, 1.0, 9.0], [4.0, 0.0, 4.0]])
-        assert all([a.item() == pytest.approx(e.item()) 
-            for a, e in zip(r2_actual.flatten(), r2_expected.flatten())])
+        r2_expected = util.TensorType(
+            [[0.0, 4.0, 16.0], [1.0, 1.0, 9.0], [4.0, 0.0, 4.0]]
+        )
+        assert all(
+            [
+                a.item() == pytest.approx(e.item())
+                for a, e in zip(r2_actual.flatten(), r2_expected.flatten())
+            ]
+        )
 
     def test_grads_1_nonzero(self):
         """
@@ -55,7 +82,7 @@ class TestSquaredDistance(object):
         r2_actual = util.squared_distance(x1, x2)
 
         # val = (0-2)^2, grad=2(0-2)=-4
-        r2_actual[0, 1].backward(retain_graph=True)  
+        r2_actual[0, 1].backward(retain_graph=True)
         grad01_actual = x1.grad[0].item()
         grad01_expected = -4.0
         assert grad01_actual == grad01_expected
@@ -86,7 +113,7 @@ class TestSquaredDistance(object):
 
         x1, x2 = self._vals_1d()
         x1.requires_grad_(True)
-         # Trick to track grads to single rows:
+        # Trick to track grads to single rows:
         x1_rows = [xi for xi in x1]
         x1 = torch.stack(x1_rows)
 
