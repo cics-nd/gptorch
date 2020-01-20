@@ -9,27 +9,20 @@ Gaussian Process Latent Variable Model (GPLVM)
 
 from warnings import warn
 
-from gptorch.model import GPModel, Param
-from gptorch.likelihoods import Gaussian
-from gptorch.mean_functions import Zero
-from gptorch.functions import cholesky, trtrs
-from gptorch import ekernels, kernels
-from gptorch import util
-
 import numpy as np
 import torch as th
-from torch.autograd import Variable
+from torch.distributions.transforms import ExpTransform
 from sklearn.decomposition import PCA
 from time import time
 
-try:
-    # Python 2
-    from future_builtins import filter
-except ImportError:
-    # Python 3
-    pass
+from .. import ekernels, kernels, util
+from ..likelihoods import Gaussian
+from ..param import Param
+from ..mean_functions import Zero
+from ..functions import cholesky, trtrs
+from ..util import TensorType, torch_dtype
 
-float_type = th.DoubleTensor
+from .base import GPModel
 
 
 class GPLVM(GPModel):
@@ -76,7 +69,7 @@ class GPLVM(GPModel):
         """
 
         warn("GPLVM is unstable and not recommended for use!")
-        
+
         assert isinstance(
             observations, np.ndarray
         ), "Observation matrix should be a np.ndarray."
@@ -87,7 +80,8 @@ class GPLVM(GPModel):
                 pca_sklean = PCA(n_components=dim_latent)
                 Xmean = pca_sklean.fit_transform(observations)
             else:
-                Xmean = util.as_variable(util.PCA(observations, dim_latent))
+                Xmean = TensorType(util.PCA(observations, dim_latent))
+                Xmean2 = PCA(n_components=dim_latent).fit_transform(observations)
         else:
             assert isinstance(Xmean, np.ndarray), (
                 "Initialization of posterior mean of latent variables should"
@@ -105,7 +99,12 @@ class GPLVM(GPModel):
             ), "Supports only ekernel.Rbf currently."
 
         super(GPLVM, self).__init__(
-            Xmean, observations, kernel, Gaussian(), Zero(), name="GPLVM"
+            Xmean,
+            observations,
+            kernel,
+            Gaussian(),
+            Zero(observations.shape[1]),
+            name="GPLVM",
         )
         del self.X
 
@@ -130,13 +129,13 @@ class GPLVM(GPModel):
 
         if self.data_type == "iid":
             # posterior mean of X initialized by PCA of Y: n x q
-            # self.Xmean = Param(th.from_numpy(Xmean).type(float_type))
-            self.Xmean = Param(Xmean.data)
+            # self.Xmean = Param(th.from_numpy(Xmean).type(TensorType))
+            self.Xmean = Param(TensorType(Xmean))
             # posterior covariance of X: n x q
             self.Xcov = Param(
-                0.5 * th.ones(self.Xmean.size()).type(float_type)
-                + 0.001 * th.randn(self.Xmean.size()).type(float_type),
-                requires_transform=True,
+                0.5 * th.ones(self.Xmean.size()).type(TensorType)
+                + 0.001 * th.randn(self.Xmean.size()).type(TensorType),
+                transform=ExpTransform(),
             )
         else:
             # sequential data
@@ -160,7 +159,7 @@ class GPLVM(GPModel):
 
             # 2) Reparameterization (3.30) p58 in Damianou Diss.
             # posterior mean of X initialized by PCA of Y: n x q
-            # Xmean = th.Tensor(x_post_mean).type(float_type)
+            # Xmean = th.Tensor(x_post_mean).type(TensorType)
             # intermediate variables, useful for inference purpose, or other queries
             self.Xmean = Variable(Xmean)
             # init the cov matrix by using the kernel
@@ -170,14 +169,14 @@ class GPLVM(GPModel):
             self.Xmean_bar = Param(Kx.data.inverse().mm(Xmean))
 
             # assume the posterior S is the same as the prior Kx
-            # self.lambda_ = Param(th.zeros(Xmean.size()).type(float_type))
+            # self.lambda_ = Param(th.zeros(Xmean.size()).type(TensorType))
             # assume the posterior S is close to the prior Kx
             # Constrain the Lambda to be positive, to ensure the S is PSD
             self.Lambda = Param(
-                th.rand(Xmean.size()).type(float_type) * 0.25, requires_transform=True
+                th.rand(Xmean.size()).type(TensorType) * 0.25, transform=ExpTransform()
             )
             # dummy initialization, n x q
-            self.Xcov = Variable(th.ones(Xmean.size()).type(float_type) * 0.5)
+            self.Xcov = Variable(th.ones(Xmean.size()).type(TensorType) * 0.5)
 
         if inducing_points is not None:
             if isinstance(inducing_points, np.ndarray):
@@ -185,13 +184,11 @@ class GPLVM(GPModel):
                     inducing_points.shape[0] == num_inducing
                     and inducing_points.shape[1] == dim_latent
                 ), "Dimensionality of inducing points does not match"
-                self.Z = Param(th.from_numpy(inducing_points).type(float_type))
+                self.Z = Param(th.from_numpy(inducing_points).type(TensorType))
         else:
             # inducing points Z, init with subset of posterior mean of X
-            z_np = Xmean.data.numpy()[
-                np.random.choice(Xmean.size(0), num_inducing, replace=False)
-            ]
-            self.Z = Param(float_type(z_np))
+            z_np = Xmean[np.random.choice(Xmean.shape[0], num_inducing, replace=False)]
+            self.Z = Param(TensorType(z_np))
 
         # Uncollapsed case, the number of parameters associated with inducing points
         #  variance is O(m^2)
@@ -204,7 +201,7 @@ class GPLVM(GPModel):
                     self.Y[
                         np.random.choice(self.Y.size(0), num_inducing, replace=False)
                     ]
-                ).type(float_type)
+                ).type(TensorType)
             )
             # posterior variance of inducing variables U: m x m
             # needs parameterization of cov matrix, e.g. Chol decomposition
@@ -212,8 +209,7 @@ class GPLVM(GPModel):
                 0.5 * th.ones(num_inducing, num_inducing), requires_transform=True
             )
 
-        # self.jitter = Param(th.FloatTensor([1e-4]), requires_transform=True)
-        self.jitter = Variable(th.Tensor([1e-6]).type(float_type))
+        self.jitter = TensorType([1e-6])
 
         # computes the total number of parameters to optimize over
         num_parameters = 0
@@ -253,7 +249,7 @@ class GPLVM(GPModel):
             Xcov = []
             # S = []
             Le = []
-            In = Variable(th.eye(num_data).type(float_type))
+            In = Variable(th.eye(num_data).type(TensorType))
             for j in xrange(dim_latent):
                 Ej = Lkx.t().mm(self.Lambda.transform()[:, j].diag()).mm(Lkx) + In
                 # print(Ej.data.eig())
@@ -273,13 +269,13 @@ class GPLVM(GPModel):
         Kzz = self.kernel.K(self.Z) + self.jitter.expand(self.Z.size(0)).diag()
         L = cholesky(Kzz, flag="Lkz")
         A = trtrs(L, trtrs(L, eKzxKxz).t()) / var_noise.expand_as(L)
-        B = A + Variable(th.eye(num_inducing).type(float_type))
+        B = A + Variable(th.eye(num_inducing).type(TensorType))
         LB = cholesky(B, flag="LB")
 
         # log|B|
         # log_det_b = LB.diag().log().sum()
 
-        log_2pi = Variable(th.Tensor([np.log(2 * np.pi)]).type(float_type))
+        log_2pi = Variable(th.Tensor([np.log(2 * np.pi)]).type(TensorType))
         elbo = -dim_output * (
             LB.diag().log().sum() + 0.5 * num_data * (var_noise.log() + log_2pi)
         )
@@ -303,14 +299,14 @@ class GPLVM(GPModel):
             # small n, pre-compute YY'
             # YYT = self.Y.mm(self.Y.t())
             D = trtrs(LB, trtrs(L, eKxz.t()))
-            W = Variable(th.eye(num_data).type(float_type)) / var_noise.expand(
+            W = Variable(th.eye(num_data).type(TensorType)) / var_noise.expand(
                 num_data, num_data
             ) - D.t().mm(D) / var_noise.pow(2).expand(num_data, num_data)
             elbo -= 0.5 * (W.mm(self.saved_terms["YYT"])).trace()
 
         # KL Divergence (KLD) btw the posterior and the prior
         if self.data_type == "iid":
-            const_nq = Variable(th.Tensor([num_data * dim_latent]).type(float_type))
+            const_nq = Variable(th.Tensor([num_data * dim_latent]).type(TensorType))
             # eqn (3.28) below p57 Damianou's Diss.
             KLD = 0.5 * (
                 self.Xmean.pow(2).sum()
@@ -323,7 +319,7 @@ class GPLVM(GPModel):
             # Xmean n x q
             # S: q x n x n
             # Kx, Kx_inverse
-            KLD = Variable(th.Tensor([-0.5 * num_data * dim_latent]).type(float_type))
+            KLD = Variable(th.Tensor([-0.5 * num_data * dim_latent]).type(TensorType))
             KLD += 0.5 * self.Xmean_bar.mm(self.Xmean_bar.t()).mm(Kx.t()).trace()
             for j in xrange(dim_latent):
                 Lej_inv = trtrs(Le[j], In)
@@ -370,10 +366,10 @@ class GPLVM(GPModel):
         # compute ELBO
         L = self.saved_terms["L"]
         A = trtrs(L, trtrs(L, eKzxKxz).t()) / var_noise.expand_as(L)
-        B = A + Variable(th.eye(num_inducing).type(float_type))
+        B = A + Variable(th.eye(num_inducing).type(TensorType))
         LB = cholesky(B, flag="LB")
 
-        log_2pi = Variable(th.Tensor([np.log(2 * np.pi)]).type(float_type))
+        log_2pi = Variable(th.Tensor([np.log(2 * np.pi)]).type(TensorType))
         elbo = -dim_output * (
             LB.diag().log().sum() + 0.5 * num_data * (var_noise.log() + log_2pi)
         )
@@ -397,14 +393,14 @@ class GPLVM(GPModel):
             # small n, pre-compute YY'
             # YYT = self.Y.mm(self.Y.t())
             D = trtrs(LB, trtrs(L, eKxz.t()))
-            W = Variable(th.eye(num_data).type(float_type)) / var_noise.expand(
+            W = Variable(th.eye(num_data).type(TensorType)) / var_noise.expand(
                 num_data, num_data
             ) - D.t().mm(D) / var_noise.pow(2).expand(num_data, num_data)
             elbo -= 0.5 * (W.mm(self.saved_terms["YYT"])).trace()
 
         # KL Divergence (KLD) btw the posterior and the prior
         if self.data_type == "iid":
-            const_nq = Variable(th.Tensor([num_data * dim_latent]).type(float_type))
+            const_nq = Variable(th.Tensor([num_data * dim_latent]).type(TensorType))
             # eqn (3.28) below p57 Damianou's Diss.
             KLD = 0.5 * (
                 self.Xmean.pow(2).sum()
@@ -484,7 +480,7 @@ class GPLVM(GPModel):
         # Design choice: do not create a tiny inference model, but reuse the
         # trained model using another function for compute the loss.
         # Add new observation variables to the original class
-        self.Y_test = Variable(th.Tensor(observ_test).type(float_type))
+        self.Y_test = Variable(th.Tensor(observ_test).type(TensorType))
 
         # Freeze the trained parameters
         for param in self.parameters():
@@ -507,7 +503,7 @@ class GPLVM(GPModel):
         argmin = argmin.view(self.Y_test.size(0)).data
         self.Xmean_test = Param(self.Xmean.data[argmin])
         self.Xcov_test = Param(
-            self.Xcov.transform().data[argmin], requires_transform=True
+            self.Xcov.transform().data[argmin], transform=ExpTransform()
         )
         print("GPLVM: Finish preparing the model for projection")
         self._pre_compute()
@@ -552,7 +548,7 @@ class GPLVM(GPModel):
             "Input_mean should be numpy.ndarary, and its column dims "
             "should be same as the latent dimensions"
         )
-        Xnew_mean = Variable(th.Tensor(Xnew_mean).type(float_type), volatile=True)
+        Xnew_mean = Variable(th.Tensor(Xnew_mean).type(TensorType), volatile=True)
 
         num_inducing = self.Z.size(0)
         beta = 1.0 / self.likelihood.variance.transform()
@@ -563,7 +559,7 @@ class GPLVM(GPModel):
         Kzz = self.kernel.K(self.Z) + self.jitter.expand(self.Z.size(0)).diag()
         L = cholesky(Kzz, flag="Lkz")
         A = trtrs(L, trtrs(L, eKzxKxz).t()) * beta.expand_as(L)
-        B = A + Variable(th.eye(num_inducing).type(float_type))
+        B = A + Variable(th.eye(num_inducing).type(TensorType))
         Lb = cholesky(B, flag="Lb")
         C = trtrs(L, Kzs)
         D = trtrs(Lb, C)
@@ -591,14 +587,15 @@ class GPLVM(GPModel):
                 "Uncertain input, inconsistent variance size, "
                 "should be numpy ndarray"
             )
-            Xnew_var = Param(th.Tensor(Xnew_var).type(float_type))
-            Xnew_var.requires_transform = True
+            Xnew_var = Param(
+                th.Tensor(Xnew_var).type(TensorType), transform=ExpTransform()
+            )
             Xnew_var.volatile = True
             # s for star (new input), z for inducing input
             eKsz = self.kernel.eKxz(self.Z, Xnew_mean, Xnew_var)
             # list of n_* expectations w.r.t. each test datum
             eKzsKsz = self.kernel.eKzxKxz(self.Z, Xnew_mean, Xnew_var, sum=False)
-            Im = Variable(th.eye(self.Z.size(0)).type(float_type))
+            Im = Variable(th.eye(self.Z.size(0)).type(TensorType))
             E = trtrs(Lb, trtrs(L, Im))
             EtE = E.t().mm(E)
             F = EtE.mm(eKxz.t().mm(self.Y)) * beta.expand(
