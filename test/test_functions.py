@@ -40,3 +40,23 @@ def test_cholesky():
     functions.cholesky(torch.eye(3))
     # Works if we need to add jitter
     functions.cholesky(torch.ones(3, 3))
+
+
+def test_cholesky_inverse():
+    la = torch.tril(torch.ones(3, 3))
+    a_inv = functions.cholesky_inverse(la)
+    assert (la @ la.T @ a_inv).allclose(torch.eye(3))
+
+
+def test_inverse():
+    a = 0.5 * torch.eye(3)
+    a_inv = functions.inverse(a)
+    assert (a @ a_inv).allclose(torch.eye(3))
+
+
+def test_lt_log_determinant():
+    a = torch.exp(torch.tril(torch.ones(3, 3)))
+    logdet_a = functions.lt_log_determinant(a)
+    assert isinstance(logdet_a, torch.Tensor)
+    assert logdet_a.ndimension() == 0
+    assert logdet_a == 3.0
