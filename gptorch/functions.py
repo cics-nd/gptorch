@@ -10,7 +10,7 @@ import torch
 from torch.nn import functional as F
 import numpy as np
 
-torch_version = [int(s) for s in torch.__version__.split(".")]
+torch_version = [int(s) for s in torch.__version__.replace("+",".").split('.') if s.isdigit()]
 _potri = torch.cholesky_inverse if torch_version >= [1, 1, 0] else torch.potri
     
 
