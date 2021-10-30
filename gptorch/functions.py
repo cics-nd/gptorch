@@ -10,8 +10,8 @@ import torch
 from torch.nn import functional as F
 import numpy as np
 
-torch_version = [int(s) for s in torch.__version__.split(".")]
-_potri = torch.cholesky_inverse if torch_version >= [1, 1, 0] else torch.potri
+_torch_majorminor = [int(s) for s in torch.__version__.split(".")[:2]]
+_potri = torch.cholesky_inverse if _torch_majorminor >= [1, 1] else torch.potri
     
 
 TRIANGULAR_SOLVE = "triangular_solve" in dir(torch)

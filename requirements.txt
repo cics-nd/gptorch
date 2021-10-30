@@ -2,12 +2,12 @@
 # Created: Saturday, July 13th 2019, 6:32:27 pm
 # Author: Steven Atkinson (steven@atkinson.mn)
 
-torch>=1
-numpy>=1.10
-scipy>=0.18
-matplotlib>=2.1.2
-scikit-learn>=0.19.1
-pytest>=3.5.0
-pytest-cov
 graphviz>=0.9
 jupyter
+matplotlib>=2.1.2
+numpy>=1.10
+pytest>=3.5.0
+pytest-cov
+scikit-learn>=0.19.1
+scipy>=0.18
+torch>=1
