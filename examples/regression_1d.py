@@ -8,6 +8,7 @@ Demonstration of GPs for regression
 
 import os
 import sys
+from argparse import ArgumentParser
 from time import time
 
 import torch
@@ -30,7 +31,7 @@ def f(x):
     return np.sin(2.0 * np.pi * x) + np.cos(3.5 * np.pi * x) - 3.0 * x + 5.0
 
 
-if __name__ == "__main__":
+def main(args):
     # Create data:
     n = 100
     x = np.linspace(0, 1, n).reshape((-1, 1))
@@ -41,9 +42,12 @@ if __name__ == "__main__":
     kern = kernels.Linear(1) + kernels.Rbf(1) + kernels.Constant(1)
 
     # Try different models:
-    model = GPR(x, y, kern)
-    # model = VFE(x, y, kern)
-    # model.cuda()  # If you want to use GPU
+    if args.model_type == "GPR":
+        model = GPR(x, y, kern)
+    elif args.model_type == "VFE":
+        model = VFE(x, y, kern)
+    if args.cuda:
+        model.cuda()  # If you want to use GPU
 
     # Train
     model.optimize(method="L-BFGS-B", max_iter=100)
@@ -62,8 +66,9 @@ if __name__ == "__main__":
     # Show prediction
     x_test = x_test.flatten()
     plt.figure()
-    plt.fill_between(x_test, (mu - unc).flatten(), (mu + unc).flatten(), 
-        color=(0.9,) * 3)
+    plt.fill_between(
+        x_test, (mu - unc).flatten(), (mu + unc).flatten(), color=(0.9,) * 3
+    )
     plt.plot(x_test, mu)
     plt.plot(x_test, f(x_test))
     for y_samp_i in y_samp:
@@ -71,8 +76,20 @@ if __name__ == "__main__":
     plt.plot(x, y, "o")
     if hasattr(model, "Z"):
         plt.plot(
-            model.Z.detach().cpu().numpy(), 
-            1.0 + plt.ylim()[0] * np.ones(model.Z.shape[0]), 
-            "+"
+            model.Z.detach().cpu().numpy(),
+            1.0 + plt.ylim()[0] * np.ones(model.Z.shape[0]),
+            "+",
         )
-    plt.show()
+    if args.no_plot:
+        plt.close()
+    else:
+        plt.show()
+
+
+if __name__ == "__main__":
+    parser = ArgumentParser()
+    parser.add_argument("--model-type", type=str, choices=("GPR", "VFE"), default="GPR")
+    parser.add_argument("--cuda", action="store_true")
+    parser.add_argument("--no-plot", action="store_true")
+
+    main(parser.parse_args())

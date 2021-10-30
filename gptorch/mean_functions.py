@@ -11,8 +11,6 @@ import torch
 
 from .util import torch_dtype
 
-torch.set_default_dtype(torch_dtype)
-
 
 class Constant(torch.nn.Module):
     """
@@ -26,13 +24,13 @@ class Constant(torch.nn.Module):
                 raise ValueError("Provided val doesn't match output dimension")
             val = val.clone()
         else:
-            val = torch.zeros(dy)
+            val = torch.zeros(dy, dtype=torch_dtype)
 
         self._dy = dy
         self.val = torch.nn.Parameter(val)
 
     def forward(self, x):
-        output = torch.zeros(x.shape[0], self._dy)
+        output = torch.zeros(x.shape[0], self._dy, dtype=torch_dtype)
         if self._is_cuda():
             output = output.cuda()
         return output + self.val

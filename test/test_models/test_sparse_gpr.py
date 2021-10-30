@@ -17,8 +17,9 @@ from gptorch.util import torch_dtype, TensorType
 
 from .common import gaussian_predictions
 
-_data_dir = os.path.join(os.path.dirname(__file__), "..", "data", "models", 
-    "sparse_gpr")
+_data_dir = os.path.join(
+    os.path.dirname(__file__), "..", "data", "models", "sparse_gpr"
+)
 
 base_path = os.path.join(os.path.dirname(__file__), "..", "..")
 if not base_path in sys.path:
@@ -56,12 +57,12 @@ class _InducingData(object):
     @atleast_col
     def _xy():
         return _get_matrix("x"), _get_matrix("y")
-    
+
     @staticmethod
     @atleast_col
     def _x_test():
         return _get_matrix("x_test")
-    
+
     @staticmethod
     @atleast_col
     def _z():
@@ -85,8 +86,14 @@ class TestVFE(_InducingData):
         kernel.variance.data = torch.zeros(1, dtype=torch_dtype)
         likelihood = likelihoods.Gaussian(variance=1.0)
 
-        model = VFE(x, y, kernel, inducing_points=z, likelihood=likelihood,
-            mean_function=mean_functions.Zero(1))
+        model = VFE(
+            x,
+            y,
+            kernel,
+            inducing_points=z,
+            likelihood=likelihood,
+            mean_function=mean_functions.Zero(1),
+        )
         loss = model.loss()
         assert isinstance(loss, torch.Tensor)
         assert loss.ndimension() == 0
@@ -100,7 +107,7 @@ class TestVFE(_InducingData):
 
         with pytest.raises(ValueError):
             # Size mismatch
-            model.loss(x=TensorType(x[:x.shape[0] // 2]))
+            model.loss(x=TensorType(x[: x.shape[0] // 2]))
 
     @needs_cuda
     def test_compute_loss_cuda(self):
@@ -121,8 +128,14 @@ class TestVFE(_InducingData):
         kernel.variance.data = torch.zeros(1, dtype=torch_dtype)
         likelihood = likelihoods.Gaussian(variance=1.0)
 
-        model = VFE(x, y, kernel, inducing_points=z, likelihood=likelihood,
-            mean_function=mean_functions.Zero(1))
+        model = VFE(
+            x,
+            y,
+            kernel,
+            inducing_points=z,
+            likelihood=likelihood,
+            mean_function=mean_functions.Zero(1),
+        )
 
         x_test = torch.Tensor(_InducingData._x_test())
         mu, s = TestVFE._y_pred()
@@ -140,7 +153,7 @@ class TestVFE(_InducingData):
     @staticmethod
     @atleast_col
     def _y_pred():
-        return _get_matrix("vfe_y_mean"),  _get_matrix("vfe_y_cov")  
+        return _get_matrix("vfe_y_mean"), _get_matrix("vfe_y_cov")
 
     @staticmethod
     def _get_model():
@@ -151,8 +164,14 @@ class TestVFE(_InducingData):
         kernel.variance.data = torch.zeros(1, dtype=torch_dtype)
         likelihood = likelihoods.Gaussian(variance=1.0)
 
-        model = VFE(x, y, kernel, inducing_points=z, likelihood=likelihood,
-            mean_function=mean_functions.Zero(1))
+        model = VFE(
+            x,
+            y,
+            kernel,
+            inducing_points=z,
+            likelihood=likelihood,
+            mean_function=mean_functions.Zero(1),
+        )
 
         return model
 
@@ -165,7 +184,12 @@ class TestSVGP(_InducingData):
         SVGP(x, y, kernel, inducing_points=_InducingData._z())
 
         SVGP(x, y, kernel, mean_function=mean_functions.Constant(y.shape[1]))
-        SVGP(x, y, kernel, mean_function=torch.nn.Linear(x.shape[1], y.shape[1]))
+        SVGP(
+            x,
+            y,
+            kernel,
+            mean_function=torch.nn.Linear(x.shape[1], y.shape[1], dtype=torch_dtype),
+        )
 
     def test_compute_loss(self):
         x, y = _InducingData._xy()
@@ -176,11 +200,18 @@ class TestSVGP(_InducingData):
         kernel.variance.data = torch.zeros(1, dtype=torch_dtype)
         likelihood = likelihoods.Gaussian(variance=1.0)
 
-        model = SVGP(x, y, kernel, inducing_points=z, likelihood=likelihood,
-            mean_function=mean_functions.Zero(1))
+        model = SVGP(
+            x,
+            y,
+            kernel,
+            inducing_points=z,
+            likelihood=likelihood,
+            mean_function=mean_functions.Zero(1),
+        )
         model.induced_output_mean.data = TensorType(u_mu)
-        model.induced_output_chol_cov.data = model.induced_output_chol_cov.\
-            _transform.inv(TensorType(u_l_s))
+        model.induced_output_chol_cov.data = model.induced_output_chol_cov._transform.inv(
+            TensorType(u_l_s)
+        )
 
         loss = model.loss()
         assert isinstance(loss, torch.Tensor)
@@ -195,18 +226,26 @@ class TestSVGP(_InducingData):
 
         with pytest.raises(ValueError):
             # Size mismatch
-            model.loss(x=TensorType(x[:x.shape[0] // 2]), y=TensorType(y))
+            model.loss(x=TensorType(x[: x.shape[0] // 2]), y=TensorType(y))
 
         model_minibatch = SVGP(x, y, kernel, batch_size=1)
         loss_mb = model_minibatch.loss()
         assert isinstance(loss_mb, torch.Tensor)
         assert loss_mb.ndimension() == 0
 
-        model_full_mb = SVGP(x, y, kernel, inducing_points=z, likelihood=likelihood,
-            mean_function=mean_functions.Zero(1), batch_size=x.shape[0])
+        model_full_mb = SVGP(
+            x,
+            y,
+            kernel,
+            inducing_points=z,
+            likelihood=likelihood,
+            mean_function=mean_functions.Zero(1),
+            batch_size=x.shape[0],
+        )
         model_full_mb.induced_output_mean.data = TensorType(u_mu)
-        model_full_mb.induced_output_chol_cov.data = model_full_mb.induced_output_chol_cov.\
-            _transform.inv(TensorType(u_l_s))
+        model_full_mb.induced_output_chol_cov.data = model_full_mb.induced_output_chol_cov._transform.inv(
+            TensorType(u_l_s)
+        )
         loss_full_mb = model_full_mb.loss()
         assert isinstance(loss_full_mb, torch.Tensor)
         assert loss_full_mb.ndimension() == 0
@@ -235,11 +274,18 @@ class TestSVGP(_InducingData):
         kernel.variance.data = torch.zeros(1, dtype=torch_dtype)
         likelihood = likelihoods.Gaussian(variance=1.0)
 
-        model = SVGP(x, y, kernel, inducing_points=z, likelihood=likelihood,
-            mean_function=mean_functions.Zero(1))
+        model = SVGP(
+            x,
+            y,
+            kernel,
+            inducing_points=z,
+            likelihood=likelihood,
+            mean_function=mean_functions.Zero(1),
+        )
         model.induced_output_mean.data = TensorType(u_mu)
-        model.induced_output_chol_cov.data = model.induced_output_chol_cov.\
-            _transform.inv(TensorType(u_l_s))
+        model.induced_output_chol_cov.data = model.induced_output_chol_cov._transform.inv(
+            TensorType(u_l_s)
+        )
 
         x_test = TensorType(_InducingData._x_test())
         mu, s = TestSVGP._y_pred()
@@ -274,10 +320,17 @@ class TestSVGP(_InducingData):
         kernel.variance.data = torch.zeros(1, dtype=torch_dtype)
         likelihood = likelihoods.Gaussian(variance=1.0)
 
-        model = SVGP(x, y, kernel, inducing_points=z, likelihood=likelihood,
-            mean_function=mean_functions.Zero(1))
+        model = SVGP(
+            x,
+            y,
+            kernel,
+            inducing_points=z,
+            likelihood=likelihood,
+            mean_function=mean_functions.Zero(1),
+        )
         model.induced_output_mean.data = TensorType(u_mu)
-        model.induced_output_chol_cov.data = model.induced_output_chol_cov.\
-            _transform.inv(TensorType(u_l_s))
-        
+        model.induced_output_chol_cov.data = model.induced_output_chol_cov._transform.inv(
+            TensorType(u_l_s)
+        )
+
         return model
